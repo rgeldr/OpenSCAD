@@ -53,7 +53,7 @@ polyLvl =
 // *********************************
 
 // The width(X) of the inside box wall in MM
-internalBoxWidthXMm = 100; // .1
+internalBoxWidthXMm = 160; // .1
 // The length(Y) of the inside box wall in MM
 internalboxLengthYMm = 60; // .1
 // ***LID***- The internal height on the box lid MIN-15mm
@@ -140,7 +140,7 @@ boxLengthYSections = len(columnsPerRow);
 // The number of hinges
 numberOfHinges = 2; // 1
 // The number of MM you want to move each hinge away from center.  If there is a middle hinge, that one won't move. 
-hingeCenterOffsetMm = 5; // 1
+hingeCenterOffsetMm = 30; // 1
 // AKA: Hinge Screw Length. The full hinge width.  This is also the length of the screw you will need to assemble the case
 hingeTotalWidthMm = 25; // 1
 // The radius of the hinge pivot
@@ -162,7 +162,7 @@ hingeToleranceMm = 0.35; // .05
 // The number of latches to generate
 numberOfLatches = 2;
 // The number in MM you want to move each hinge away from center.  If there is a middle hinge, that one won't move.
-requestedLatchCenterOffsetMm = 5;
+requestedLatchCenterOffsetMm = 30;
 // AKA: Latch Screw Length. The total width of the latch.  This is the length of the screws needed to assemble the latch.
 latchSupportTotalWidth = 25;
 // The width of the outside portions of the latch mount
@@ -199,7 +199,7 @@ generateHandle = true;
 // Minimum distance between latches (MM)
 minDistanceBetweenLatches = 80;
 // How far the handle sticks out for fingers (MM)
-handleOutwardExtension = 40;
+handleOutwardExtension = 30;
 // Thickness of the handle arms (MM)
 handleThickness = 4; // [2:1:10]
 
@@ -1015,8 +1015,8 @@ module CaseHandle() {
             }
         }
         // Extended screw holes for long latch screws to pass freely through
-        translate([latch1_innerX - 0.1, 0, handlePrintHeight]) rotate([0, 90, 0]) cylinder(h=handleThickness + 0.2, r=latchScrewLargeRadiusMm, $fn=100);
-        translate([latchLast_innerX - handleThickness - 0.1, 0, handlePrintHeight]) rotate([0, 90, 0]) cylinder(h=handleThickness + 0.2, r=latchScrewLargeRadiusMm, $fn=100);
+        translate([latch1_innerX - 0.1, 0, handlePrintHeight]) rotate([0, 90, 0]) cylinder(h=handleThickness + 0.2, r=latchScrewSmallRadiusMm + .05, $fn=100);
+        translate([latchLast_innerX - handleThickness - 0.1, 0, handlePrintHeight]) rotate([0, 90, 0]) cylinder(h=handleThickness + 0.2, r=latchScrewSmallRadiusMm + .05 , $fn=100);
     }
 }
 
