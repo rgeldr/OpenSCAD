@@ -1,0 +1,23 @@
+{
+    "fileFormatVersion": "1",
+    "parameterSets": {
+        "New set 1": {
+            "bottom_inner_dia": "24.5",
+            "bottom_length": "30.000000000000004",
+            "bottom_outer_dia": "27.5",
+            "top_inner_dia": "17",
+            "top_length": "30.000000000000004",
+            "top_outer_dia": "20",
+            "transition_length": "10"
+        },
+        "New set 2": {
+            "bottom_inner_dia": "24.5",
+            "bottom_length": "40.000000000000007",
+            "bottom_outer_dia": "29.5",
+            "top_inner_dia": "15",
+            "top_length": "40.000000000000007",
+            "top_outer_dia": "20",
+            "transition_length": "25"
+        }
+    }
+}

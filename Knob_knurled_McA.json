@@ -1,0 +1,13 @@
+{
+    "fileFormatVersion": "1",
+    "parameterSets": {
+        "New set 1": {
+            "head_depth": "4.5",
+            "head_diameter": "10",
+            "knob_diameter": "35",
+            "knob_thickness": "8",
+            "knurl_size": "1.5",
+            "shaft_diameter": "6"
+        }
+    }
+}
