@@ -333,6 +333,35 @@ translate([0,0,closedBoxZOffset])
         if(generateLatches) {
             StandardLatch(latchSupportTotalWidth, latchSupportWidth, latchScrewPositionPct, boxTopHeightZMm, boxBottomHeightZMm, latchSupportRadius, latchToloerance);
         }
+        
+        // --- GENERATE SEPARATE HANDLES ---
+        if(generateHandle && numberOfLatches >= 2) {
+            // Ensures exactly 0.5mm gap by subtracting half the remaining gap from the screw offset
+            handlePrintHeight = latchScrewOffsetMm - ((0.5 - openingTolerance) / 2); 
+            
+            if(viewBoxClosed) {
+                translate([boxWidthXMm,0,0])
+                rotate([0,0,180])
+                translate([0,-boxLengthYMm,0])
+                translate([0, boxLengthYMm + latchSupportRadius + rimWidthMm, -latchScrewOffsetMm]) {
+                    // Position Bottom Handle
+                    mirror([0,0,1]) translate([0, 0, -handlePrintHeight]) CaseHandle();
+                    
+                    // Position Top Handle
+                    translate([0, 0, (latchScrewOffsetMm * 2) + openingTolerance])
+                        translate([0, 0, -handlePrintHeight]) CaseHandle();
+                }
+            }
+            else {
+                // Generate handles flat on the build plate (safely placed in front of the box)
+                translate([0, -(handleOutwardExtension + latchSupportRadius*2 + 10), 0]) {
+                    CaseHandle(); 
+                    translate([0, -(handleOutwardExtension + latchSupportRadius*2 + 10), 0])
+                        CaseHandle(); 
+                }
+            }
+        }
+        
     }
 
 // Create feet if requested
@@ -726,62 +755,7 @@ module LatchMount(latchSupportTotalWidth, latchSupportWidth, latchScrewPositionP
                     translate([latchMountX-((latchSupportWidth+latchToloerance)+.1),boxLengthYMm+latchSupportRadius+rimWidthMm,-latchScrewOffsetMm]) rotate([0,90,0])
                         cylinder(latchInsideWidthMm+(latchSupportWidth*2)+(latchToloerance*2)+.2,latchScrewSmallRadiusMm,latchScrewSmallRadiusMm, $fn=100);
                 }
-            }
-
-            // --- NEW HANDLE GENERATION ---
-            if (generateHandle && numberOfLatches >= 2) {
-                
-                // Calculate outer edges of outermost latches
-                latch1_Offset = 1 < (numberOfLatches+1)/2 ? -latchCenterOffsetMm : (1 == (numberOfLatches+1)/2 ? 0 : latchCenterOffsetMm);
-                latch1_mountX = (1*latchSpacing)+((1-1)*latchSupportTotalWidth)+latchSupportWidth+latchToloerance+latch1_Offset;
-                latch1_innerX = latch1_mountX + latchInsideWidthMm + latchToloerance + latchSupportWidth;
-
-                latchLast_Offset = numberOfLatches < (numberOfLatches+1)/2 ? -latchCenterOffsetMm : (numberOfLatches == (numberOfLatches+1)/2 ? 0 : latchCenterOffsetMm);
-                latchLast_mountX = (numberOfLatches*latchSpacing)+((numberOfLatches-1)*latchSupportTotalWidth)+latchSupportWidth+latchToloerance+latchLast_Offset;
-                latchLast_innerX = latchLast_mountX - latchSupportWidth - latchToloerance;
-
-                handleStartY = boxLengthYMm + latchSupportRadius + rimWidthMm;
-                armLength = handleOutwardExtension;
-                handleZ = -latchScrewOffsetMm;
-                
-                // 0.2mm top + 0.2mm bottom + 0.1 opening tolerance = 0.5mm total closed gap
-                handleGapOffset = 0.2; 
-
-                difference() {
-                    union() {
-                        // Left Arm
-                        hull() {
-                            translate([latch1_innerX, handleStartY, handleZ]) rotate([0, 90, 0])
-                                cylinder(h=handleThickness, r=latchSupportRadius, $fn=latchPolyLvl);
-                            translate([latch1_innerX, handleStartY + armLength, handleZ]) rotate([0, 90, 0])
-                                cylinder(h=handleThickness, r=latchSupportRadius, $fn=latchPolyLvl);
-                            translate([latch1_innerX, handleStartY - latchSupportRadius, -handleGapOffset - 0.01])
-                                cube([handleThickness, armLength + latchSupportRadius*2, 0.01]);
-                        }
-                        // Right Arm
-                        hull() {
-                            translate([latchLast_innerX - handleThickness, handleStartY, handleZ]) rotate([0, 90, 0])
-                                cylinder(h=handleThickness, r=latchSupportRadius, $fn=latchPolyLvl);
-                            translate([latchLast_innerX - handleThickness, handleStartY + armLength, handleZ]) rotate([0, 90, 0])
-                                cylinder(h=handleThickness, r=latchSupportRadius, $fn=latchPolyLvl);
-                            translate([latchLast_innerX - handleThickness, handleStartY - latchSupportRadius, -handleGapOffset - 0.01])
-                                cube([handleThickness, armLength + latchSupportRadius*2, 0.01]);
-                        }
-                        // Crossbar
-                        hull() {
-                            translate([latch1_innerX, handleStartY + armLength, handleZ]) rotate([0, 90, 0])
-                                cylinder(h=latchLast_innerX - latch1_innerX, r=latchSupportRadius, $fn=latchPolyLvl);
-                            translate([latch1_innerX, handleStartY + armLength - latchSupportRadius, -handleGapOffset - 0.01])
-                                cube([latchLast_innerX - latch1_innerX, latchSupportRadius*2, 0.01]);
-                        }
-                    }
-                    // Extend latch screw holes through the handle arms
-                    translate([latch1_innerX - 0.1, handleStartY, handleZ]) rotate([0, 90, 0])
-                        cylinder(h=handleThickness + 0.2, r=latchScrewSmallRadiusMm, $fn=100);
-                    translate([latchLast_innerX - handleThickness - 0.1, handleStartY, handleZ]) rotate([0, 90, 0])
-                        cylinder(h=handleThickness + 0.2, r=latchScrewSmallRadiusMm, $fn=100);
-                }
-            }
+            }       
         }
 }
 
@@ -1002,6 +976,48 @@ module BoxShellBase(height, additionalShellThickness = 0) {
         translate([boxWidthXMm-boxChamferRadiusMm,(x*(((boxLengthYMm-(numSideSupportRibs*supportRibWidth))/(numSideSupportRibs+1))+supportRibWidth))-supportRibWidth+actualRibCenterOffsetMm,0]) rotate([90,0,180]) linear_extrude(supportRibWidth) Wall2D(boxWallWidthMm, supportRibThickness, height, false, false);
     }
     
+}
+
+module CaseHandle() {
+    latchPolyLvl = polyLvl <= 8 ? 8 : polyLvl;
+    latchInsideWidthMm = latchSupportTotalWidth - (2*latchSupportWidth) - (2*latchToloerance);
+    latchSpacing = (boxWidthXMm - (numberOfLatches*latchSupportTotalWidth)) / (numberOfLatches + 1);
+
+    latch1_Offset = 1 < (numberOfLatches+1)/2 ? -latchCenterOffsetMm : (1 == (numberOfLatches+1)/2 ? 0 : latchCenterOffsetMm);
+    latch1_mountX = (1*latchSpacing)+((1-1)*latchSupportTotalWidth)+latchSupportWidth+latchToloerance+latch1_Offset;
+    latch1_innerX = latch1_mountX + latchInsideWidthMm + latchToloerance + latchSupportWidth;
+
+    latchLast_Offset = numberOfLatches < (numberOfLatches+1)/2 ? -latchCenterOffsetMm : (numberOfLatches == (numberOfLatches+1)/2 ? 0 : latchCenterOffsetMm);
+    latchLast_mountX = (numberOfLatches*latchSpacing)+((numberOfLatches-1)*latchSupportTotalWidth)+latchSupportWidth+latchToloerance+latchLast_Offset;
+    latchLast_innerX = latchLast_mountX - latchSupportWidth - latchToloerance;
+
+    armLength = handleOutwardExtension;
+    handlePrintHeight = latchScrewOffsetMm - ((0.5 - openingTolerance) / 2); 
+    
+    difference() {
+        union() {
+            // Left Arm
+            hull() {
+                translate([latch1_innerX, 0, handlePrintHeight]) rotate([0, 90, 0]) cylinder(h=handleThickness, r=latchSupportRadius, $fn=latchPolyLvl);
+                translate([latch1_innerX, armLength, handlePrintHeight]) rotate([0, 90, 0]) cylinder(h=handleThickness, r=latchSupportRadius, $fn=latchPolyLvl);
+                translate([latch1_innerX, -latchSupportRadius, 0]) cube([handleThickness, armLength + latchSupportRadius*2, 0.01]);
+            }
+            // Right Arm
+            hull() {
+                translate([latchLast_innerX - handleThickness, 0, handlePrintHeight]) rotate([0, 90, 0]) cylinder(h=handleThickness, r=latchSupportRadius, $fn=latchPolyLvl);
+                translate([latchLast_innerX - handleThickness, armLength, handlePrintHeight]) rotate([0, 90, 0]) cylinder(h=handleThickness, r=latchSupportRadius, $fn=latchPolyLvl);
+                translate([latchLast_innerX - handleThickness, -latchSupportRadius, 0]) cube([handleThickness, armLength + latchSupportRadius*2, 0.01]);
+            }
+            // Crossbar
+            hull() {
+                translate([latch1_innerX, armLength, handlePrintHeight]) rotate([0, 90, 0]) cylinder(h=latchLast_innerX - latch1_innerX, r=latchSupportRadius, $fn=latchPolyLvl);
+                translate([latch1_innerX, armLength - latchSupportRadius, 0]) cube([latchLast_innerX - latch1_innerX, latchSupportRadius*2, 0.01]);
+            }
+        }
+        // Extended screw holes for long latch screws to pass freely through
+        translate([latch1_innerX - 0.1, 0, handlePrintHeight]) rotate([0, 90, 0]) cylinder(h=handleThickness + 0.2, r=latchScrewLargeRadiusMm, $fn=100);
+        translate([latchLast_innerX - handleThickness - 0.1, 0, handlePrintHeight]) rotate([0, 90, 0]) cylinder(h=handleThickness + 0.2, r=latchScrewLargeRadiusMm, $fn=100);
+    }
 }
 
 // TODO: modify this so the bottom corner angle always starts at 60+ degrees.  be careful here so we can honor the poly counts and still connect correctly to the sides and bottom.
