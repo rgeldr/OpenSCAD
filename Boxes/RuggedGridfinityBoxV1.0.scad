@@ -451,7 +451,13 @@ module BoxBottom(isStdHinge) {
                 BoxCircularSealExtrude(boxCircularSealRadius,0.3*boxCircularSealRadius);
             }
             
-            // (The hollowing block was removed here to preserve the solid floor)
+            // 1. TRIM INTRUDING GEOMETRY (Preserves the flat floor)
+            difference() {
+                // Shift the cutout cube up by boxWallWidthMm so it only deletes the ribs in the empty space
+                translate([0, 0, -(boxBottomHeightZMm - boxWallWidthMm - 0.01)]) 
+                    cube([boxWidthXMm, boxLengthYMm, boxBottomHeightZMm - boxWallWidthMm - 0.02]);
+                BoxShellBase(boxBottomHeightZMm, boxChamferRadiusMm * 2);
+            }
         }
         
         // 3. INJECT THE GRIDFINITY BASE 
@@ -467,9 +473,6 @@ module BoxBottom(isStdHinge) {
         }
     }
 }
-
-
-
 
 
 module FeetCutout(height) {
