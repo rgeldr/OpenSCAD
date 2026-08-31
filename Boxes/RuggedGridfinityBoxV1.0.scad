@@ -60,6 +60,18 @@ gridUnitsY = 2;
 // Internal base height in Gridfinity units (7mm each)
 gridUnitsZ = 6;
 
+/*[Lid Grid Settings]*/
+// *************************************
+// **** Lid Grid Aesthetic Settings **** 
+// *************************************
+
+// Should the lid feature a carved 7mm grid pattern?
+generateLidGridPattern = true;
+// Depth of the carved grid lines in mm
+lidGridDepth = 1.0; 
+// Width of the carved grid grooves in mm
+lidGridWidth = 1.0;
+
 // --- Auto-Calculated Gridfinity Dimensions ---
 // Horizontal dimensions are multiples of 42mm, minus a 0.5mm tolerance gap.
 boxWidthXMm = (gridUnitsX * 42) - 0.5;
@@ -395,34 +407,49 @@ module BoxTop(isStdHinge) {
                     if(isFeetAdded) {
                         FeetCutout(boxTopHeightZMm);
                     }
-                    
-                    // remove back rim ??? 
-                    // TODO: Is this needed?
-                    //translate([-.1,boxLengthYMm,openingTolerance-.1]) cube([boxWidthXMm+.2, rimWidthMm+.2, rimHeightMm+.2]);
                 }
             BoxCircularSealExtrude(boxCircularSealRadius-openingTolerance,0.3*boxCircularSealRadius);
             translate([boxWidthXMm,0,0])
             rotate([0,0,180])
-            translate([0,-boxLengthYMm,0]) // add back in the rim width
+            translate([0,-boxLengthYMm,0]) 
             rotate([180,0,0]) translate([0,-boxLengthYMm,-openingTolerance]) LatchMount(latchSupportTotalWidth, latchSupportWidth, latchScrewPositionPct, boxTopHeightZMm, latchSupportRadius, latchToloerance);
             
             if(isStdHinge) {
                 TopStandardHinge();
             }
         };
-        // TODO: Cut off anything over/under the top/bottom of the case
+        
+        // Cut off anything over/under the top/bottom of the case
         translate([-(boxWidthXMm/2), -(boxLengthYMm/2), boxTopHeightZMm+openingTolerance]) cube([boxWidthXMm*2,boxLengthYMm*2, boxTopHeightZMm*10]);
         
-        // TODO: Cut off anything in the inside of the case
+        // Cut off anything in the inside of the case
         rotate([180,0,0]) translate([0,-boxLengthYMm,-openingTolerance]) 
             difference() {
                 translate([0,0,-(boxTopHeightZMm-boxWallWidthMm-.01)]) cube([boxWidthXMm, boxLengthYMm, boxTopHeightZMm-boxWallWidthMm-.02]);
                 BoxShellBase(boxTopHeightZMm, boxChamferRadiusMm*2);
             }
+            
+        // --- 7MM GRID GROOVE PATTERN (EDGE-TO-EDGE) ---
+        if(generateLidGridPattern) {
+            translate([0, 0, boxTopHeightZMm - lidGridDepth]) {
+                
+                // Carve X-direction grooves all the way across (Y from 0 to boxLengthYMm)
+                for (x = [42 : 42 : boxWidthXMm]) {
+                    translate([x - (lidGridWidth / 2), 0, 0])
+                        cube([lidGridWidth, boxLengthYMm, lidGridDepth + 0.1]);
+                }
+                
+                // Carve Y-direction grooves all the way across (X from 0 to boxWidthXMm)
+                for (y = [42 : 42 : boxLengthYMm]) {
+                    translate([0, y - (lidGridWidth / 2), 0])
+                        cube([boxWidthXMm, lidGridWidth, lidGridDepth + 0.1]);
+                }
+            }
+        }
     }
-rotate([180,0,0]) translate([0,-boxLengthYMm,-openingTolerance]) 
+
+    rotate([180,0,0]) translate([0,-boxLengthYMm,-openingTolerance]) 
         union() {
-            // Add ", true" to the end of this next line!
             BoxLengthXSeparators(boxSectionSeparatorWidth,boxTopHeightZMm, false, true);
             BoxWidthYSeparators(boxSectionSeparatorWidth,boxTopHeightZMm, true);
     }
