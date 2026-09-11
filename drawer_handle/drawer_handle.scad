@@ -22,7 +22,7 @@ Finger_clearance = 25;
 Thickness = 15;
 
 // Determines Bend Radius
-Bend_Radius = 10;
+Bend_Radius = 0;
 
 /* [Hidden] */
 $fn = 64; // Smoothness resolution for curves

@@ -7,7 +7,7 @@ Length = 120;
 Chamfer_size = 1.5; 
 
 // Determines the passthrough hole diameter for the two screws.
-Skrew_diameter = 4;
+Skrew_diameter = 6;
 
 // Determines handle width
 Width = 20;
@@ -16,7 +16,10 @@ Width = 20;
 Finger_clearance = 25;
 
 // Determines thickness of handle.
-Thickness = 10;
+Thickness = 15;
+
+// Determines Bend Radius
+Bend_Radius = 0;
 
 /* [Hidden] */
 $fn = 64; // Smoothness resolution for curves
@@ -39,7 +42,7 @@ module chamfered_profile(t, w, c) {
 module Parametric_Handle() {
     
     // Auto-calculate bend alignments
-    Bend_Radius = Thickness; 
+    Bend_Radius = Thickness  + Bend_Radius; 
     C_Z = Finger_clearance - (Thickness / 2); 
 
     // We generate the model standing up on its legs
