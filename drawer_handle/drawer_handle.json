@@ -1,0 +1,15 @@
+{
+    "fileFormatVersion": "1",
+    "parameterSets": {
+        "New set 1": {
+            "Bend_Radius": "11",
+            "Chamfer_size": "1.7",
+            "Finger_clearance": "25",
+            "Length": "120",
+            "Skrew_diameter": "4",
+            "Skrew_head_diameter": "9",
+            "Thickness": "15",
+            "Width": "22"
+        }
+    }
+}
