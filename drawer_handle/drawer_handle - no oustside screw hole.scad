@@ -7,7 +7,7 @@ Length = 120;
 Chamfer_size = 1.5; 
 
 // Determines the passthrough hole diameter for the two screws.
-Skrew_diameter = 6;
+Skrew_diameter = 6.5;
 
 // Determines handle width
 Width = 20;
