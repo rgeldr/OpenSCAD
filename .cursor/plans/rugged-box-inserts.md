@@ -1,4 +1,4 @@
-Status: plan only, not started
+Status: implementation complete (Phases 1–3)
 
 # Rugged Box — standalone custom dividers (V1.0)
 
@@ -491,21 +491,21 @@ From the repo root: `python3 -m unittest discover -s Boxes/tests -p 'test_check_
 
 ### Phase 1 — helpers and the checker
 
-- [ ] Divider functions in §3.3 (including `rb_mirror_y` / `rb_lid_tree`) in `RuggedBoxCustomeDividersV1.0.scad`.
-- [ ] `rugged-box-custom-dividers-test.scad` with one assert per function; echo `custom-dividers-tests ok`.
-- [ ] `check_overhangs.py` and `test_check_overhangs.py`.
+- [x] Divider functions in §3.3 (including `rb_mirror_y` / `rb_lid_tree`) in `RuggedBoxCustomeDividersV1.0.scad`.
+- [x] `rugged-box-custom-dividers-test.scad` with one assert per function; echo `custom-dividers-tests ok`.
+- [x] `check_overhangs.py` and `test_check_overhangs.py`.
 - **Done when:** `.echo` and unittest exit 0 on Windows and Linux. No box STL yet.
 
 ### Phase 2 — shell, lid shell, hinges, latches, handle (no dividers)
 
-- [ ] Copy V1.3 modules in §1.2 into the product file; apply §6 printability edits. `dividerLayoutPreset=0`.
-- [ ] Parameter names and defaults match §3.2 and the decisions table.
+- [x] Copy V1.3 modules in §1.2 into the product file; apply §6 printability edits. `dividerLayoutPreset=0`.
+- [x] Parameter names and defaults match §3.2 and the decisions table.
 - **Done when:** `bottom-preset-0.stl`, `lid-preset-0.stl`, `latch.stl`, and `handle.stl` each pass `--hardwarnings` and `check_overhangs.py`.
 
 ### Phase 3 — fused dividers (bottom and lid)
 
-- [ ] Bottom: §5.1. Lid: §5.2 with `rb_mirror_y` tree. Presets 0–3 on both.
-- [ ] Assert `rb_divider_tip_z(0.5) == -0.5` and `rb_closed_divider_gap(0.5, 0.1) == 1.1`.
+- [x] Bottom: §5.1. Lid: §5.2 with `rb_mirror_y` tree. Presets 0–3 on both.
+- [x] Assert `rb_divider_tip_z(0.5) == -0.5` and `rb_closed_divider_gap(0.5, 0.1) == 1.1`.
 - **Done when:** all eight STLs (`bottom-preset-0..3`, `lid-preset-0..3`) pass `--hardwarnings` and `check_overhangs.py`. Preset 2 on the lid is the Y-mirror of the bottom. `closed-preview.png` uses `viewBoxClosed=true`. §7.0 checked off.
 
 ---
