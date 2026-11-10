@@ -1,21 +1,17 @@
 #!/usr/bin/env python3
-"""Overhang gate for Rugged Box custom-divider exports (preset STLs)."""
+"""Overhang gate for Rugged Box custom-divider exports (preset STLs).
+
+Downward faces shallower than 60° from horizontal fail (n_z < -0.5),
+which is the 30°-from-vertical rule. Bed faces and matched hollow-boolean
+pairs are ignored by check_triangles / strip_csg_coplanar_pairs. There is
+no rim-shelf or low-poly exemption.
+"""
 from __future__ import annotations
 
-import re
 import sys
 from typing import Sequence
 
 from check_overhangs import check_triangles, load_triangles, strip_csg_coplanar_pairs
-
-
-def _rim_shelf_z(path: str) -> float | None:
-    name = path.rsplit("/", 1)[-1].rsplit("\\", 1)[-1].lower()
-    if name.startswith("bottom-"):
-        return 29.0
-    if name.startswith("lid-"):
-        return 14.0
-    return None
 
 
 def main(argv: Sequence[str]) -> int:
@@ -25,15 +21,7 @@ def main(argv: Sequence[str]) -> int:
     any_fail = False
     for path in argv[1:]:
         tris = strip_csg_coplanar_pairs(load_triangles(path))
-        fails = check_triangles(tris, rim_shelf_z=_rim_shelf_z(path))
-        # Low-poly wall/floor corner quads ($fn=8 corners) land ~0.73–0.73 below the -0.5 limit.
-        fails = [
-            f
-            for f in fails
-            if not (f[2] < 29.25 and f[1] >= -0.765)
-            and not (f[1] < -0.99 and f[2] > 31.5)
-            and not (f[1] < -0.99 and f[2] > 10.5 and f[2] < 17.5)
-        ]
+        fails = check_triangles(tris)
         if fails:
             any_fail = True
             print(f"{path}: {len(fails)} overhang triangle(s)")

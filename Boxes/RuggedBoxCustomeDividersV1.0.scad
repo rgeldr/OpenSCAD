@@ -579,47 +579,24 @@ module rb_latch_connector_slab(w, h, thick) {
 }
 
 // 60° tongue (additive bead) and groove (subtractive cut) cross-sections
+// Simple 60° tongue: apex on -Y, shoulders at 30°/150°, arc only between the shoulders.
+// (An arc that restarts at 0° self-intersects and CGAL drops the solid.)
 function _rb_bead_profile_points(r, fn) =
-    let(steps = max(24, fn))
-    let(jx = r * sqrt(3) / 2)
-    let(jy = r / 2)
-    let(arc = [for (i = [0 : steps - 1]) let(a = i * 180 / steps) [r * cos(a), r * sin(a)]])
-    concat([[0, -r]], [[jx, jy]], arc, [[-jx, jy]]);
+    let(steps = max(8, fn))
+    let(arc = [for (i = [0 : steps]) let(a = 30 + i * 120 / steps) [r * cos(a), r * sin(a)]])
+    concat([[0, -r]], arc);
 
 function _rb_groove_profile_points(r) =
     let(jx = r * sqrt(3) / 2)
     let(jy = r / 2)
     [[-jx, jy], [jx, jy], [0, -r]];
 
-// rotate_extrude profiles must not cross the Y axis (all x strictly >= 0).
-function _rb_groove_profile_rx_points(r) =
-    let(jx = r * sqrt(3) / 2)
-    let(jy = r / 2)
-    let(e = 0.02)
-    [[0, jy + e], [2 * jx + e, jy + e], [jx, -r - e], [e, -r - e]];
-
-function _rb_bead_profile_rx_points(r, fn) =
-    let(steps = max(24, fn))
-    let(jx = r * sqrt(3) / 2)
-    let(jy = r / 2)
-    let(e = 0.02)
-    let(arc = [for (i = [0 : steps - 1]) let(a = 90 + i * 90 / steps) [r * cos(a) + e, r * sin(a)]])
-    concat([[e, -r - e], [e, jy + e]], arc, [[jx + e, jy + e]]);
-
 module rb_bead_profile(r, $fn = 24) {
     polygon(_rb_bead_profile_points(r, $fn));
 }
 
-module rb_bead_profile_rx(r, $fn = 24) {
-    polygon(_rb_bead_profile_rx_points(r, $fn));
-}
-
 module rb_groove_profile(r) {
     polygon(_rb_groove_profile_points(r));
-}
-
-module rb_groove_profile_rx(r) {
-    polygon(_rb_groove_profile_rx_points(r));
 }
 
 module rb_tongue_groove_circle(r, $fn = 24) {
@@ -661,7 +638,9 @@ module BoxTop(isStdHinge) {
         // TODO: Cut off anything in the inside of the case
         rotate([180,0,0]) translate([0,-boxLengthYMm,-openingTolerance]) 
             difference() {
-                translate([0,0,-(boxTopHeightZMm-boxWallWidthMm-.01)]) cube([boxWidthXMm, boxLengthYMm, boxTopHeightZMm-boxWallWidthMm-.02]);
+                // Overlap the opening plane so the rim does not keep a paper-thin downward skin.
+                translate([0,0,-(boxTopHeightZMm-boxWallWidthMm)+0.02])
+                    cube([boxWidthXMm, boxLengthYMm, (boxTopHeightZMm-boxWallWidthMm)+0.03]);
                 BoxShellBase(boxTopHeightZMm, boxChamferRadiusMm*2);
             }
     }
@@ -714,7 +693,9 @@ module BoxBottom(isStdHinge) {
             }
             
             difference() {
-                translate([0,0,-(boxBottomHeightZMm-boxWallWidthMm-.01)]) cube([boxWidthXMm, boxLengthYMm, boxBottomHeightZMm-boxWallWidthMm-.02]);
+                // Overlap the opening plane so the rim does not keep a paper-thin downward skin.
+                translate([0,0,-(boxBottomHeightZMm-boxWallWidthMm)+0.02])
+                    cube([boxWidthXMm, boxLengthYMm, (boxBottomHeightZMm-boxWallWidthMm)+0.03]);
                 BoxShellBase(boxBottomHeightZMm, boxChamferRadiusMm);
             }
             if(isFeetAdded) {
@@ -794,13 +775,11 @@ module BoxCircularSealExtrude(radius, zOffset, is_subtractive = false) {
         }
     }
 
-    module _seal_profile_rx() {
-        if (is_subtractive) {
-            rb_groove_profile_rx(radius);
-        } else {
-            rb_bead_profile_rx(radius, $fn = 64);
-        }
-    }
+    // Same closed profile on straights and corners. Radial offset keeps every
+    // vertex strictly on +X of the revolve axis (2*radius < wall+rim).
+    seal_orbit_r = (pivotDistanceFromWall + (pivotDistanceFromWall - boxWallWidthMm) + rimWidthMm) / 2;
+    seal_half_x = radius * sqrt(3) / 2;
+    assert(seal_orbit_r - seal_half_x > 0.05, "seal profile would cross the rotate_extrude axis");
 
     translate([pivotDistanceFromWall,boxWallWidthMm-((boxWallWidthMm+rimWidthMm)/2),zOffset]) 
         rotate([0,90,0]) linear_extrude(boxWidthXMm-(2*pivotDistanceFromWall)) _seal_profile();
@@ -812,13 +791,13 @@ module BoxCircularSealExtrude(radius, zOffset, is_subtractive = false) {
         rotate([-90,0,0]) linear_extrude(boxLengthYMm-(2*pivotDistanceFromWall)) _seal_profile();
 
     translate([pivotDistanceFromWall,pivotDistanceFromWall,zOffset]) 
-        rotate([0,0,180]) rotate_extrude(angle = 90, $fn=polyLvl) translate([(pivotDistanceFromWall+(pivotDistanceFromWall-boxWallWidthMm)+rimWidthMm)/2,0]) _seal_profile_rx();
+        rotate([0,0,180]) rotate_extrude(angle = 90, $fn=polyLvl) translate([seal_orbit_r,0]) _seal_profile();
     translate([pivotDistanceFromWall,boxLengthYMm-pivotDistanceFromWall,zOffset]) 
-        rotate([0,0,90]) rotate_extrude(angle = 90, $fn=polyLvl) translate([(pivotDistanceFromWall+(pivotDistanceFromWall-boxWallWidthMm)+rimWidthMm)/2,0]) _seal_profile_rx();
+        rotate([0,0,90]) rotate_extrude(angle = 90, $fn=polyLvl) translate([seal_orbit_r,0]) _seal_profile();
     translate([pivotDistanceFromWall+boxWidthXMm-(2*pivotDistanceFromWall),boxLengthYMm-pivotDistanceFromWall,zOffset]) 
-        rotate([0,0,0]) rotate_extrude(angle = 90, $fn=polyLvl) translate([(pivotDistanceFromWall+(pivotDistanceFromWall-boxWallWidthMm)+rimWidthMm)/2,0]) _seal_profile_rx();
+        rotate([0,0,0]) rotate_extrude(angle = 90, $fn=polyLvl) translate([seal_orbit_r,0]) _seal_profile();
     translate([pivotDistanceFromWall+boxWidthXMm-(2*pivotDistanceFromWall),pivotDistanceFromWall,zOffset]) 
-        rotate([0,0,270]) rotate_extrude(angle = 90, $fn=polyLvl) translate([(pivotDistanceFromWall+(pivotDistanceFromWall-boxWallWidthMm)+rimWidthMm)/2,0]) _seal_profile_rx();
+        rotate([0,0,270]) rotate_extrude(angle = 90, $fn=polyLvl) translate([seal_orbit_r,0]) _seal_profile();
 
 }
 
@@ -1234,21 +1213,20 @@ module Wall2D(wallThickness, additionalWallThickness, height, isRimIncluded, isF
             
             translate([-boxChamferRadiusMm-(additionXAdj),0])
                 union() {
-                    // Add the rim
+                    // Rim: closed quad. The inner edge overlaps the wall by rim_eps so the
+                    // 2D union is one solid (a wedge that only touches at a point is
+                    // non-manifold and CGAL drops the rotate_extrude). Underside is
+                    // 60° from horizontal — 30° from vertical — with no flat shelf.
                     if(isRimIncluded) {
-                        rim_underside_drop = rimWidthMm * tan(60);
-                        difference() {
-                            translate([0,-rimHeightMm]) circle(r = rimWidthMm, $fn=4);
-                            translate([-rimWidthMm - .1, -rimHeightMm - rim_underside_drop - .1])
-                                polygon([
-                                    [0, rim_underside_drop + .2],
-                                    [(rimWidthMm * 2) + .2, 0],
-                                    [0, 0]
-                                ]);
-                            translate([-rimWidthMm-.1,-rimHeightMm]) square([(rimWidthMm*2)+.2, rimWidthMm+.1]);
-                            translate([0,-rimHeightMm-rim_underside_drop-.1]) square([(rimWidthMm*2)+.2, (rim_underside_drop*2)+.2]);
-                        }
-                        translate([-rimWidthMm,-rimHeightMm]) square([rimWidthMm, rimHeightMm]);
+                        rim_eps = 0.02;
+                        rim_span = rimWidthMm + rim_eps;
+                        rim_underside_drop = rim_span * tan(60);
+                        polygon([
+                            [-rimWidthMm, 0],
+                            [rim_eps, 0],
+                            [rim_eps, -(rimHeightMm + rim_underside_drop)],
+                            [-rimWidthMm, -rimHeightMm]
+                        ]);
                     }
 
                     translate([0,-height + boxChamferRadiusMm]) square([wallThickness, height - boxChamferRadiusMm]);
@@ -1265,6 +1243,26 @@ module Wall2D(wallThickness, additionalWallThickness, height, isRimIncluded, isF
                                 translate([-chamferTrimAdj,-floorChamferRadius - .1]) square([floorChamferRadius + chamferTrimAdj + .1, (floorChamferRadius*2)+.2]);
                             }
                             translate([-floorChamferRadius - .1,-(boxChamferRadiusMm*2)]) square([(floorChamferRadius*2)+.2, boxChamferRadiusMm]);
+                            // Replace bottom-corner chords shallower than 60° from horizontal
+                            // with a 60° secant. The flat bed (print surface) stays at y=-r0.
+                            for (side = [-1, 1]) {
+                                r0 = boxChamferRadiusMm;
+                                ax = side * r0;
+                                ay = -r0;
+                                dx = side * cos(60);
+                                dy = sin(60);
+                                tlen = -2 * (ax * dx + ay * dy);
+                                bx = ax + tlen * dx;
+                                by = ay + tlen * dy;
+                                mx = (ax + bx) / 2;
+                                my = (ay + by) / 2;
+                                mlen = sqrt(mx * mx + my * my);
+                                polygon([
+                                    [ax, ay],
+                                    [bx, by],
+                                    [mx / mlen * floorChamferRadius * 1.5, my / mlen * floorChamferRadius * 1.5]
+                                ]);
+                            }
                         }
                 }
         }      
@@ -1273,13 +1271,14 @@ module Wall2D(wallThickness, additionalWallThickness, height, isRimIncluded, isF
         //translate([(-wallThickness-additionalWallThickness)+chamferTrimAdj,-height]) square([(wallThickness+additionalWallThickness)-chamferTrimAdj, wallThickness]);
         
         if (additionalWallThickness > 0) {
+            // Closed 60° chamfer (from horizontal) across the extra wall thickness.
             top_trim = additionalWallThickness + wallThickness * 2;
-            top_trim_drop = top_trim / tan(60);
             translate([-boxChamferRadiusMm - additionalWallThickness - 0.05, 0.05])
-                difference() {
-                    square([top_trim + 0.1, top_trim_drop + 0.1]);
-                    translate([0.05, 0.05]) square([top_trim, top_trim_drop]);
-                }
+                polygon([
+                    [0, 0],
+                    [top_trim, 0],
+                    [0, -(top_trim * tan(60))]
+                ]);
         }
         
         // If we are rotating, we need to cut off any execess floor or wall on the other side of the y axis

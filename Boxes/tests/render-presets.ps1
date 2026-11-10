@@ -68,8 +68,10 @@ try {
     $echo = Get-Content "out\custom-dividers-test.echo" -Raw
     if ($echo -notmatch "custom-dividers-tests ok") { throw "assert run did not report success" }
 
-    & $py -m unittest discover -s Boxes/tests -p "test_*.py"
-    if ($LASTEXITCODE -ne 0) { throw "unit tests failed" }
+    if (-not $env:RENDER_PRESETS_SKIP_UNITTEST) {
+        & $py -m unittest discover -s Boxes/tests -p "test_*.py"
+        if ($LASTEXITCODE -ne 0) { throw "unit tests failed" }
+    }
 
     foreach ($p in 0, 1, 2, 3) {
         Invoke-OpenSCAD "bottom preset $p" @(

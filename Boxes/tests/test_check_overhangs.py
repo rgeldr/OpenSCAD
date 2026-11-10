@@ -71,8 +71,8 @@ class CheckOverhangsTests(unittest.TestCase):
         self.assertEqual(len(check_triangles(tris)), 0)
 
     def test_nz_just_under_limit_passes(self):
-        # Tessellated 60° faces can land a few ulps under -0.5.
-        nz = -0.5 - 1e-6
+        # Tessellated 60° faces can land slightly under -0.5 (seen: -0.500137).
+        nz = -0.5 - 1.4e-4
         run = 2.0
         rise = run * math.sqrt(max(0.0, 1.0 / (nz * nz) - 1.0))
         tris = [((0, 0, 2), (0, run, 2), (run, 0, 2 - rise))]

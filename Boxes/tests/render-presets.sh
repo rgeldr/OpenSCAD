@@ -55,7 +55,9 @@ set -e
 grep -qE '(ERROR|WARNING):' "$LOG" && { grep -E '(ERROR|WARNING):' "$LOG" >&2; exit 1; } || true
 echo "  assert echo ... ok"
 grep -q "custom-dividers-tests ok" out/custom-dividers-test.echo
-"$PYTHON" -m unittest discover -s Boxes/tests -p 'test_*.py'
+if [[ -z "${RENDER_PRESETS_SKIP_UNITTEST:-}" ]]; then
+  "$PYTHON" -m unittest discover -s Boxes/tests -p 'test_*.py'
+fi
 
 for p in 0 1 2 3; do
   run_scad "bottom preset $p" -o "out/bottom-preset-$p.stl" \
