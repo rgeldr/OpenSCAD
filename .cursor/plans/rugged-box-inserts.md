@@ -1,65 +1,54 @@
 Status: plan only, not started
 
-# Rugged Box — Recursive Divider Inserts
+# Rugged Box V1.4 — standalone box with fused dividers
 
-**Goal:** A new OpenSCAD entry point that builds STLBuddy-style nested dividers for the V1.3 rugged box. `Boxes/RuggedBoxV1.3.scad` stays unchanged.
+**Goal:** One new OpenSCAD file that prints a complete rugged box (bottom, lid, hinges, latches) and fuses a nested divider tree into the bottom. `Boxes/RuggedBoxV1.3.scad` is not modified and is not `include`d or `use`d.
 
-**Architecture:** One library of pure layout functions, plus a verbatim copy of V1.3's cavity boolean (not a new rounded-rect). One entry file for the Customizer and the tray mesh. One assert test. Two render scripts (PowerShell 5.1 and bash).
+**Look and parameters:** The new file is based on V1.3. It should look like V1.3 (shell profile, ribs, rim, hinge and latch shape) and it should keep V1.3's parameter names and source defaults wherever that still makes sense. It is a separate file, not a wrapper.
 
-**Tech stack:** OpenSCAD 2021.01 or newer (`assert`, `.echo` export, `--hardwarnings`). No BOSL2.
-
-**Reference:** [STLBuddy Hinged Box Maker](https://stlbuddy.com/hinged-box-maker). The attached screenshot is a top view of a 100 mm × 80 mm interior: one full-width cross-divider, then a column in each of the two bands at different X positions (the lower column is the orange selected wall, near 74 mm). That is a depth-2 tree, not a uniform grid. The same tree can nest further (a column only in one band, or a band split into three).
+**Reference:** [STLBuddy Hinged Box Maker](https://stlbuddy.com/hinged-box-maker). The screenshot is a top view of a 100 mm × 80 mm interior: one full-width cross-divider, then a column in each band at a different X (the lower column is the orange wall, near 74 mm).
 
 ---
 
 ## Global constraints
 
 - Do not modify `Boxes/RuggedBoxV1.3.scad`.
-- Do not fork hinges, latches, the handle, feet, or the seal.
-- Smallest design that can express the screenshot. No string dialect besides the one grammar below. No finger scoops in this build.
+- `Boxes/RuggedBoxV1.4.scad` is the product. It has no `include` and no `use`. Not of V1.3, and not of any other file. Helpers live in that same file.
+- The only other `.scad` is `Boxes/tests/rugged-box-v14-test.scad`. It `use`s V1.4 and nothing else. `use` brings in the functions and does not draw the box. The product file stays runnable on its own.
+- Copy V1.3 behavior by copying the modules into V1.4 and editing them there. Do not fork a second hinge/latch design.
 - Implementation starts only when Jason says run/build.
-- Commands must run in Windows PowerShell 5.1 (Windows 11 default) and in bash. PowerShell 5.1 has no `&&`.
+- Commands must run in Windows PowerShell 5.1 and in bash. PowerShell 5.1 has no `&&`.
 
-### Hard rule — 3D printer friendly (Jason, PR #1)
+### Hard rule — 3D printer friendly (Jason)
 
-Every part this plan **produces** must print **without support** in its intended orientation:
+In the print orientation below, every downward-facing surface is at least **60° from the build plate** (at most **30° from vertical**). No supports. No bridges. No horizontal underside.
 
-- **Downward-facing** triangle normals (air above the face, solid below when printed) may not be shallower than **60° from the build plate** — equivalently, the angle between the face and **vertical (+Z)** must be **≤ 30°**.
-- **Upward-facing** surfaces and the **build-plate contact** (`z ≈ 0`) are unrestricted.
-- No horizontal ceilings/bridges, no lips or chamfers on **undersides**, no fillet geometry copied from the cavity profile onto sloped tray faces.
+Upward faces and the face sitting on the plate are fine.
 
-**Intended print orientation (all tray outputs):**
+| Part | On the bed |
+|------|------------|
+| Bottom, dividers fused in | Outer floor on `z = 0`. Opening and divider tops toward +Z. |
+| Lid | Outer top skin on `z = 0`. Opening toward +Z. Not flipped into the installed pose. |
+| Latch bodies | `linear_extrude` in +Z, back face on `z = 0`. Same idea as V1.3's print layout. |
+| Handle (two copies) | Flat base on `z = 0`, grip toward +Z. |
+| Gasket, only if `boxSealType = 2` | Flat on `z = 0`. |
+| Feet, only if `isFeetAdded` | Flat base on `z = 0`. |
 
-| Part | Orientation on the bed |
-|------|-------------------------|
-| **Bottom drop-in tray** (`dividerTarget = "bottom"`) | Tray **floor outer face** on `z = 0`. Walls and dividers grow **+Z**. Compartments open upward. |
-| **Lid drop-in tray** (Phase 3, `dividerTarget = "lid"`) | **Same** — floor on the plate, walls up. The tray is a separate print; Jason drops it into the lid cavity after printing. Do **not** flip the mesh to match the installed lid pose. |
-| **Walls-only** (`dividerFloorThickness = 0`) | Bottom of each divider wall segment on `z = 0` (no floor slab). |
+There is no printed hinge pin. V1.3 uses a screw. The knuckles and the screw holes are part of the bottom and the lid.
 
-Design geometry so compliance is **obvious from construction** (vertical `linear_extrude` only). Do not rely on the checker to excuse modeled overhangs.
+Design the solids so the rule is true from construction. The STL check is the backstop, not a license to model an overhang and hope.
+
+A downward face at angle φ from horizontal has unit outward normal `n_z = -cos(φ)`. The face fails when `n_z < -sin(30°) = -0.5`, i.e. φ < 60°, i.e. more than 30° from vertical. A face at exactly 60° has `n_z = -0.5` and passes.
 
 ---
 
-## 1. What V1.3 actually is
+## 1. What V1.3 is, and what V1.4 keeps
 
-### 1.1 Files
+### 1.1 V1.3, read from the file
 
-| File | Role |
-|------|------|
-| `Boxes/RuggedBoxV1.3.scad` | Hinged box. Target. Unchanged. |
-| `Boxes/RuggedBoxV1.3.json` | GUI Customizer presets. CLI does not load this unless `-p`/`-P` are passed. |
-| `Boxes/RuggedBoxV1.2.scad`, `RuggedGridfinityBoxV1.0.scad` | Same divider idea (rows with a column count). Not the code we extend. |
-| Other files under `Boxes/` | Unrelated. |
+`Boxes/RuggedBoxV1.3.scad` is one monolith. Lines 1–251 are Customizer assignments. Lines 256–263 derive the outside size. Lines 281–383 place geometry at the top level, so `include` of that file always draws a box. Nothing under `Boxes/` uses `include` or `use` today.
 
-Nothing in `Boxes/` uses `include` or `use`. Each box file is a monolith. There is no repo style guide beyond that SCAD style.
-
-### 1.2 How the file is structured
-
-- Lines 1–251: Customizer assignments (view flags, `BoxPolygonStyle` → `polyLvl`, internal size, wall, chamfer, seal, rim, the legacy grid, hinges, latches, handle, feet).
-- Lines 256–263: outside size and section height.
-- Lines 281–383: **top-level geometry** (gasket coupon, `BoxBottom`, `BoxTop`, latches, handle, feet, `CreateBoxInserts`, gasket). It is not inside a module. `include` of this file always renders a box.
-
-Outside size (lines 256–263):
+Outside size:
 
 ```openscad
 boxWidthXMm  = internalBoxWidthXMm + (2*boxWallWidthMm);
@@ -68,86 +57,69 @@ boxBottomHeightZMm = internalboxBottomHeightZMm + boxWallWidthMm;
 boxTopHeightZMm    = internalBoxTopHeightZMm + boxWallWidthMm;
 ```
 
-File defaults: internal 160 × 60 mm, bottom interior height 30 mm, lid interior 15 mm, wall 2 mm, chamfer 1 mm. The screenshot's 100 × 80 mm is a preset we will set in the new file, not a V1.3 default.
+Source defaults: interior 160 × 60 mm, bottom interior height 30 mm, lid interior 15 mm, wall 2 mm, chamfer 1 mm. The screenshot's 100 × 80 mm is not a V1.3 default. V1.4 keeps the source defaults. The screenshot layout is a preset that scales to whatever the interior is.
 
-### 1.3 Interior cavity (verified, not a rounded rect of `boxChamferRadiusMm`)
+Print layout when `viewBoxClosed` is false: the bottom is translated by `boxBottomHeightZMm` so the floor sits on the bed and the opening faces up (lines 311–317). The lid is moved beside it and rotated so it also sits on the bed (lines 326–328). Latches are extruded beside the box (lines 633–637). Handles sit in front (lines 356–361). V1.4 uses that same arrangement.
 
-**Plan rectangle the existing dividers use** (`BoxLengthXSeparators`, lines 878–893):
+`requestedLatchCenterOffsetMm` is assigned twice (line 165 as 30, line 214 as 5). OpenSCAD uses the last one, so the effective default is 5. V1.4 has a single assignment, default 5.
 
-- Origin `(boxWallWidthMm, boxWallWidthMm)`.
-- Size `internalBoxWidthXMm` × `internalboxLengthYMm`.
-- Straight walls span that full rectangle. The straights are not shortened by a corner radius.
+The legacy dividers (`gridMode`, `columnsPerRow`, lines 102–132 and 878–947) are a ragged grid. They cannot put a column in one band only, and they cannot put the two columns of the screenshot at different X positions. V1.4 does not copy that grid.
 
-**Vertical extent** (lines 895–898, 940–943): a divider cube runs from `z = -(height - boxWallWidthMm)` to `z = 0`. For the bottom, `height` is `boxBottomHeightZMm`, so the cube height is `internalboxBottomHeightZMm`. The divider modules treat `z = 0` as the top of the cavity (the parting plane) and the bottom of that cube as the floor top. Dividers sit on the floor and touch the parting plane.
+### 1.2 Features V1.4 reproduces
 
-**Corners are not `circle(r = boxChamferRadiusMm)`.** `BoxShellBase` (lines 951–963) sweeps `Wall2D` with `rotate_extrude` at the four corners. `Wall2D` (lines 1024–1091) is a vertical wall profile:
+Same names, same source defaults, same look, except the printability edits in §6.
 
-- `floorChamferRadius = sqrt(boxChamferRadiusMm^2 + boxChamferRadiusMm^2)` (line 1026), i.e. `boxChamferRadiusMm * sqrt(2)`.
-- The inner fillet circle has radius `floorChamferRadius - boxWallWidthMm` (line 1074).
-- Extra corner trim runs only when `wallThickness <= boxChamferRadiusMm` (line 1076).
+| Feature | Where it is in V1.3 | In V1.4 |
+|---------|---------------------|---------|
+| Bottom shell and lid shell | `BoxShellBase`, `Wall2D`, `BoxBottom`, `BoxTop` | Yes. Inner floor fillet kept. |
+| Side ribs | `BoxShellBase` lines 966–977 | Yes. |
+| Rim | `Wall2D` lines 1046–1063 | Yes. Underside chamfer changed from 45° to 60° (§6). |
+| Hinges, screw holes, count, offsets | `BotomStandardHinge`, `TopStandardHinge` | Yes. Barrel, hole, and brace changed (§6). |
+| Latch mounts and latch bodies | `LatchMount`, `StandardLatch` | Yes. Mount barrel, hole, and brace changed. Latch body stays a Z extrusion. |
+| Handle | `CaseHandle`, default on | Yes, if it passes §6. |
+| Circular seal and gasket seal | `boxSealType`, seal modules | Yes. Circular profile changed. Gasket slot kept. |
+| Feet | `isFeetAdded` default false | Yes, optional. |
+| Closed-box preview | `viewBoxClosed` | Yes. CLI exports use the print layout (`false`). |
+| Poly level | `BoxPolygonStyle` → `polyLvl` | Yes. |
 
-The comments on lines 64 and 67 disagree (`>` vs `>=`) about when the inside corner is square. The code is the authority: the extra trim is applied when wall thickness is less than or equal to the chamfer radius. File defaults (wall 2, chamfer 1) skip that trim. Several JSON presets do too. A tray clipped to a rounded rect of radius `boxChamferRadiusMm` would be wrong for those boxes, and wrong for the filleted ones as well.
+### 1.3 Features V1.4 drops
 
-The void cut in `BoxBottom` (lines 453–457) is the cavity solid:
+| Dropped | Why |
+|---------|-----|
+| Legacy `gridMode` / `columnsPerRow` dividers | Replaced by the split tree, fused into the bottom. |
+| `generateEmptyBottomBoxTPUInsert`, `generateEmptyTopBoxTPUInsert`, `CreateBoxInserts` | A blank TPU insert is a different part. `resize()` also scales the fillet. |
+| `generateGasketTestObjects` coupon | A printer-tuning offcut, not the box. |
+| The second copy of the latch Customizer block | It only overrides one default. |
+| Drop-in tray, tray floor, `insertTrayTolerance`, `dividerFloorThickness`, `dividerBottomClearance` | Jason wants the dividers fused into the box. |
 
-```openscad
-difference() {
-    translate([0,0,-(boxBottomHeightZMm-boxWallWidthMm-.01)])
-        cube([boxWidthXMm, boxLengthYMm, boxBottomHeightZMm-boxWallWidthMm-.02]);
-    BoxShellBase(boxBottomHeightZMm, boxChamferRadiusMm);
-}
-```
+### 1.4 Cavity the dividers fuse into
 
-`BoxTop` uses the same cut with `boxChamferRadiusMm*2` (lines 417–422). Side ribs (lines 966–977) are outside the inner face. They do not change the cavity.
+The divider modules in V1.3 span the rectangle from `(boxWallWidthMm, boxWallWidthMm)` by `internalBoxWidthXMm` × `internalboxLengthYMm` (lines 878–893). That rectangle is the vertical inner face. The corners are not a `circle` of radius `boxChamferRadiusMm`.
 
-**Do not copy `CreateBoxInserts` (lines 517–537).** That difference is then `resize()`d to the interior minus `insertTolerance`, which scales the fillet. It is not a true offset.
+`Wall2D` (lines 1024–1091), swept by `BoxShellBase`:
 
-**Lid mirror** (`BoxTop` lines 424–428 and `BoxLengthXSeparators` lines 884–893): the lid geometry is `rotate([180,0,0]) translate([0,-boxLengthYMm,...])`, which maps `(x, y)` to `(x, boxLengthYMm - y)`. `isReversed` only flips which row's column count is used. X is not mirrored. A tree mirror for the lid is a Y mirror only: complement Y positions and swap the two Y children. Doing both is a double mirror. Do not mirror X.
+- `floorChamferRadius = boxChamferRadiusMm * sqrt(2)` (line 1026).
+- The inner fillet is the circle of radius `floorChamferRadius - wallThickness` (line 1074).
+- The extra corner trim runs only when `wallThickness <= boxChamferRadiusMm` (line 1076). File defaults (wall 2, chamfer 1) skip it, so those inside corners are square. Other presets are not.
 
-### 1.4 Legacy dividers, and why they cannot do the screenshot
+The void is the `difference` at lines 453–457: a cube minus `BoxShellBase(..., boxChamferRadiusMm)`. The lid uses `boxChamferRadiusMm * 2` (lines 417–422). Ribs sit outside the inner face.
 
-- `BoxWidthYSeparators` (lines 924–936): full-width walls across X, one per row boundary. `numBoxLengthYSectionsToSkip` drops some of those walls.
-- `BoxLengthXSeparators` (lines 878–922): each row has `columnsPerRow[row]` equal columns. An X wall spans only that row.
-
-`columnsPerRow` is either "N columns in every row" or a flat list like `[1, 2, 4]` (lines 102–132). That is a ragged grid: every X wall in a row spans the whole row. It cannot put a column in the lower band at 74 mm and a different column in the upper band, and it cannot split only one side of a wall. The screenshot needs a tree.
-
-### 1.5 Reuse decision
-
-| Approach | Why it loses |
-|----------|----------------|
-| `include <RuggedBoxV1.3.scad>` | Pastes the file. Its assignments overwrite ours. Top-level code from line 281 renders the whole box. |
-| `use <RuggedBoxV1.3.scad>` | Imports modules only. Those modules read V1.3's own assignments, not this file's Customizer values. `-D` on the main file does not retarget them. The divider modules are also hard-wired to `columnsPerRow`. |
-| Copy the whole box | A second hinge/latch codebase. |
-
-**Use this:** new file, same variable names for the few cavity inputs. Copy three pieces **verbatim** into the library and delete nothing else from V1.3:
-
-1. `Wall2D` (lines 1024–1091).
-2. `BoxShellBase` **without** the rib loop (lines 951–963 only).
-3. The cavity `difference` (lines 453–457), called with the bottom height.
-
-Clearance is that same solid built with `Wall2D(boxWallWidthMm + insertTrayTolerance, ...)`, which subtracts a thicker wall and shrinks the void. Do not `resize()` it the way `CreateBoxInserts` does.
-
-The printed tray is not the 3D void itself. In `Wall2D` the inner fillet sits at the floor and the inner boundary moves into the cavity there (center x of that circle is `floorChamferRadius`, which is past the vertical inner face at `wallThickness`). The void is tighter at the floor than higher up. A solid equal to the void is wider at the top than at the base, so it overhangs when printed floor-down. Take the plan with `projection(cut=true)` 0.01 mm above the floor top and extrude the floor and the walls vertically from that plan. `projection()` without `cut=true` is the shadow of the wider upper outline and collides with the fillet.
-
-Copied modules keep reading `boxChamferRadiusMm`, `boxWallWidthMm`, `rimWidthMm`, `rimHeightMm`, and `polyLvl`. The entry file defines those names. Do not rewrite the fillet.
+Divider cubes in V1.3 run from the floor top up to the parting plane (`z = 0` in module space, lines 895–898). V1.4 stops them short of that plane so the lid closes (§5).
 
 ---
 
-## 2. Files to add
+## 2. Files
 
 | File | Responsibility |
 |------|----------------|
-| `Boxes/lib/rugged-box-divider-lib.scad` | Layout functions, the copied cavity pieces, tray module. No top-level geometry. |
-| `Boxes/RuggedBoxV1.4-Inserts.scad` | Customizer, presets, calls the tray. |
-| `Boxes/tests/rugged-box-divider-lib-test.scad` | Calls every helper and `assert`s. Echoes one success line. No mesh. |
-| `Boxes/tests/render-presets.ps1` | Windows PowerShell 5.1 render + overhang check. |
-| `Boxes/tests/render-presets.sh` | bash render + overhang check. |
-| `Boxes/tests/check_overhangs.py` | STL overhang audit (stdlib only). |
-| `Boxes/tests/test_check_overhangs.py` | Synthetic-STL unit tests for the checker. |
+| `Boxes/RuggedBoxV1.4.scad` | The whole box, the divider tree, the Customizer. No `include`, no `use`. |
+| `Boxes/tests/rugged-box-v14-test.scad` | `use <../RuggedBoxV1.4.scad>`, then `assert`s. Echoes one success line. No mesh, because `use` does not run the product's top-level geometry. |
+| `Boxes/tests/render-presets.ps1` | PowerShell 5.1 renders and overhang checks. |
+| `Boxes/tests/render-presets.sh` | bash renders and overhang checks. |
+| `Boxes/tests/check_overhangs.py` | STL normal check. Stdlib only. |
+| `Boxes/tests/test_check_overhangs.py` | Synthetic-STL tests for the checker. |
 
-No `RuggedBoxV1.4-Inserts.json`. A sibling JSON is loaded by the GUI and, with `-p`/`-P`, overrides `-D`. Presets live in the `.scad` file so CLI `-D dividerLayoutPreset=N` is the value that renders.
-
-`V1.4-Inserts` is an insert for the V1.3 box, not a replacement box.
+No `RuggedBoxV1.4.json`. A sibling JSON is loaded by the GUI and overrides `-D` when `-p`/`-P` are passed. Presets live in the `.scad` file. The helpers take their inputs as arguments, so the test does not depend on Customizer values inside the `use`d file.
 
 ---
 
@@ -157,175 +129,158 @@ No `RuggedBoxV1.4-Inserts.json`. A sibling JSON is loaded by the GUI and, with `
 
 A leaf is `[]`. A split is `["x" or "y", pos_mm, child_lo, child_hi]`.
 
-- `"x"` is a **Column** (the "+ Column" button): a wall of constant X across the parent cell's Y span. `pos_mm` is millimeters from the cell's `xmin`.
+- `"x"` is a **Column**: a wall of constant X across the parent cell's Y span. `pos_mm` is millimeters from the cell's `xmin`.
 - `"y"` is a **Cross-divider**: a wall of constant Y across the parent cell's X span. `pos_mm` is millimeters from the cell's `ymin`.
 - `child_lo` is the side toward the smaller coordinate.
 
-Positions are millimeters in the parent cell. Presets compute those millimeters from the current cavity size, so changing the box size keeps the picture. The customizer string is also millimeters (the screenshot slider is millimeters; it reads 73.92).
-
-Screenshot preset (100 mm wide, 80 mm deep; numbers are the picture, not a caliper reading):
+Screenshot shape, as fractions of whatever the interior is (preset 2 computes the millimeters):
 
 ```openscad
 // one cross-divider, then a column in EACH band at a different X
-["y", 32,
-  ["x", 62, [], []],
-  ["x", 74, [], []]
+["y", 0.40 * length,
+  ["x", 0.62 * width, [], []],
+  ["x", 0.74 * width, [], []]
 ]
 ```
 
-A column in only one band, which the same model must also accept:
+The same tree can leave one side empty (`["y", pos, ["x", pos2, [], []], []]`) or nest deeper. `rb_uniform(cols, rows, w, l)` builds the equal-spacing grid. Do not port `numBoxLengthYSectionsToSkip`; omitting a split is the same thing.
+
+### 3.2 Customizer
+
+The Customizer edits numbers, bools, strings, and flat numeric vectors. It does not edit a nested list. V1.3 already hides computed lists behind `/* [Hidden] */` (lines 125–132). V1.4 does the same for the tree.
 
 ```openscad
-["y", 32, ["x", 50, [], []], []]
-```
+/*[Objects To Generate]*/
+generateBoxBottom = true;
+generateBoxTop = true;
+generateLatches = false;
+generateHandle = true;
+generateGasket = true;       // still only if boxSealType == 2
+generateFeetIfSetInSettings = true;
 
-A deeper split (not the screenshot, covered by an assert so nesting stays honest):
-
-```openscad
-["y", 32, [], ["x", 40, [], ["x", 70, [], []]]]
-```
-
-`rb_uniform(cols, rows, w, l)` builds the equal-spacing case of the V1.3 grid. Do not port `numBoxLengthYSectionsToSkip`; omitting a split is the same thing.
-
-### 3.2 Customizer (what the panel can actually edit)
-
-The Customizer edits numbers, bools, strings, and flat numeric vectors. It does not edit a nested list. V1.3 already hides computed lists behind `/* [Hidden] */` (lines 125–132). Do the same for the tree.
-
-```openscad
 /*[Divider layout]*/
 dividerLayoutPreset = 2; // [0:None, 1:UniformGrid, 2:Screenshot, 3:CustomString]
 uniformGridCols = 2;     // [1:8]
 uniformGridRows = 2;     // [1:8]
+dividerWallThickness = 1.2;
+dividerTopClearance = 0.5;
 dividerLayoutString = "y32(x62(.,.),x74(.,.))";
 ```
 
-- Presets 0–2 ignore the string.
-- Preset 3 parses the string. Grammar, one line, no second dialect:
+Box, hinge, latch, handle, seal, rib, and feet parameters keep V1.3's names and source defaults (`internalBoxWidthXMm`, `internalboxLengthYMm`, `internalboxBottomHeightZMm`, `internalBoxTopHeightZMm`, `boxWallWidthMm`, `boxChamferRadiusMm`, `BoxPolygonStyle`, `rimWidthMm`, `rimHeightMm`, `openingTolerance`, and the rest of those groups).
+
+- Presets 0–2 ignore the string. Preset 2 scales the screenshot fractions to the current interior.
+- Preset 3 parses the string. Millimeters in the current interior. It does not scale if the box size changes.
 
 ```text
 node = "." | ("x" | "y") number "(" node "," node ")"
 ```
 
-Screenshot string: `y32(x62(.,.),x74(.,.))`. Spaces are allowed. No fractions, no `|`, no `;`. A fraction mode would make `32` mean either 32 mm or 32% depending on a hidden flag. Millimeters only.
+`y32(x62(.,.),x74(.,.))` is the screenshot on a 100 × 80 mm interior. Spaces are allowed. No fractions, no `|`, no `;`. Parsing uses `search()` / `chr()` (OpenSCAD 2021.01 has no regex). A bad string `assert`s with the string in the message.
 
-Parsing uses `search()` / `chr()` (no regex in OpenSCAD 2021.01). Invalid strings `assert` with the string in the message.
-
-There is no in-file "custom tree" preset. The string is the editable nested layout. Adding a second representation is how the earlier draft of this plan grew a grammar it could not parse (`y@0.4|x@0.5;...`).
-
-### 3.3 Helpers and the assert that locks each one
+### 3.3 Helpers and the assert on each
 
 | Function | Assert |
 |----------|--------|
-| `rb_parse(s)` | screenshot string → the screenshot tree; `"y32(x50(.,.),.)"` → column on one side only; `"y32(.,x40(.,x70(.,.)))"` → depth 3. |
-| `rb_uniform(cols, rows, w, l)` | 2×2 on a 100×80 cavity → one Y wall at 40 and one X wall at 50 in each band. |
+| `rb_parse(s)` | screenshot string → that tree; `"y32(x50(.,.),.)"` → column on one side; `"y32(.,x40(.,x70(.,.)))"` → depth 3. |
+| `rb_uniform(cols, rows, w, l)` | 2×2 on 100×80 → one Y wall at 40 and one X wall at 50 in each band. |
 | `rb_walls(node, xmin, ymin, xmax, ymax)` | screenshot tree → 3 walls; the Y wall spans the full width; each X wall spans only its band. |
-| `rb_mirror_y(node, ymin, ymax)` | screenshot tree, mirrored twice, equals the original. X positions unchanged. |
-| `rb_wall_z(interior_h, floor_t, top_clear)` | see §5. `rb_wall_z(30, 1.2, 1) == 27.8`. |
-| `rb_inside_corner_trimmed(wall, chamfer)` | `false` for `(2, 1)` (file default); `true` for `(2, 6)`. This is the line 1076 predicate, not a new radius. |
+| `rb_mirror_y(node, ymin, ymax)` | mirrored twice equals the original. X unchanged. Used only if lid dividers are added later. |
+| `rb_divider_top_z(clearance)` | with clearance 0.5, the top is 0.5 below the parting plane. |
+| `rb_inside_corner_trimmed(wall, chamfer)` | `false` for `(2, 1)`; `true` for `(2, 6)`. This is the line 1076 predicate. |
 
-`rb_validate(node, xmin, ymin, xmax, ymax, thickness)` asserts each `pos_mm` leaves at least `thickness` of parent on both sides, and that the wall count is ≤ 32.
+`rb_validate` asserts each `pos_mm` leaves at least `dividerWallThickness` of parent on both sides, thickness ≥ 1.0, clearance > 0, and wall count ≤ 32.
 
 ---
 
 ## 4. Output
 
-**Default: a drop-in tray** (floor + walls) for the bottom cavity. The screenshot shows walls that are part of the box. We cannot union into `BoxBottom` without editing V1.3 or copying it. A tray that occupies the real cavity is the printable result that does not fork the box. V1.3's own grid dividers should be off (`numberOfRows = 1`, one column) when this tray is used, or the walls collide. Say that in the entry-file header comment.
+One solid bottom: shell union dividers. One lid. Latch bodies, handles, gasket, and feet are the same separate pieces V1.3 already splits off for printing.
 
-| Parameter | Default | Role |
-|-----------|---------|------|
-| `dividerLayoutPreset` | `2` | Screenshot tree. |
-| `dividerWallThickness` | `1.2` | Same as V1.3 `boxSectionSeparatorWidth`. |
-| `dividerFloorThickness` | `1.2` | `0` turns the floor off (walls only). |
-| `insertTrayTolerance` | `0.1` | Same as V1.3 `insertTolerance`. Added to the cavity wall thickness so the void shrinks. |
-| `dividerTopClearance` | `1.0` | Gap from the top of the walls to the parting plane. |
-| `dividerBottomClearance` | `0` | Tray sits on the floor. |
-| `dividerTarget` | `"bottom"` | `"lid"` uses the lid interior height and `rb_mirror_y`. |
+CLI renders set one `generate*` flag at a time so each STL is one part. `dividerLayoutPreset` is varied only on the bottom.
 
-Cavity inputs, same names as V1.3 so values can be copied across: `internalBoxWidthXMm`, `internalboxLengthYMm`, `internalboxBottomHeightZMm`, `internalBoxTopHeightZMm`, `boxWallWidthMm`, `boxChamferRadiusMm`, `BoxPolygonStyle`, `rimWidthMm`, `rimHeightMm`. Screenshot preset sets internal size to 100 × 80.
-
-Not parameters: finger scoops, a fused `BoxBottom`, gasket/hinge/latch flags.
+**Lid dividers: not in this build.** The screenshot's compartments are in the base. The default lid interior is 15 mm, which is a poor second tray, and an empty lid closes over the bottom dividers without a second set of walls to align. If Jason wants them later, fuse the Y-mirrored tree into the lid with the same embed rules and the same clearance under the lid's outer skin. Do not print the lid upside down to match the installed pose.
 
 ---
 
-## 5. Clip and height
+## 5. How the dividers fuse
 
-**Clip:** build the cavity void from §1.3 with wall thickness `boxWallWidthMm + insertTrayTolerance`. `projection(cut=true)` 0.01 mm above the floor top gives the tight plan. If that projection is empty, the cut plane missed the solid; fix the z before exporting. Extrude the tray floor and each wall vertically from the intersection of that plan with the wall's rectangle. Walls stay vertical. This replaces `BoxInsert`'s end cuts (lines 944–945) for the tray and does not copy the fillet onto the tray as an overhang.
+Each wall is a vertical cube:
 
-**Height.** Interior height of the bottom is `internalboxBottomHeightZMm` (floor top to parting plane). The lid's interior is above the seam; do not subtract it from the bottom tray. `openingTolerance` (0.1 mm) is the gap between the two shells and is already outside both interiors; do not subtract it either.
+- Plan span is the parent cell, extended **0.2 mm** into any side that meets the shell or another divider (`rb_embed = 0.2`).
+- Bottom is 0.2 mm below the floor's top face, so the cube is buried in the floor.
+- Top is `dividerTopClearance` (default 0.5 mm) below the parting plane (`z = 0` in `BoxBottom` module space, before the print translate).
 
-```text
-tray_h = interior_h - dividerBottomClearance - dividerTopClearance
-wall_h = tray_h - dividerFloorThickness
-```
+Then `union()` with the shell. No `intersection()` with the cavity solid.
 
-`rb_wall_z(30, 1.2, 1)` with bottom clearance 0 returns `30 - 1 - 1.2 = 27.8`. The earlier formula used `interior - clearances` as the wall height and then added the floor, so the tray was `dividerFloorThickness` too tall and crossed the parting plane.
+Why not clip the cube to the fillet surface: the fillet makes the void tighter at the floor than higher up. Cutting the divider to that surface leaves an end that sticks out farther at the top than at the bottom. That end faces down and follows the fillet through angles below 60° from horizontal. It fails the rule. Embedding the vertical cube into the wall and the floor fillet does not. The fillet stays the shell's own inner surface. The divider meets it with overlap, so there is no gap and no shared face for CGAL to split.
 
-OpenSCAD module origin uses V1.3's cavity `z` (floor top near `z = -(height - boxWallWidthMm)`). Before export, **`translate([0, 0, +tray_h])`** (or equivalent) moves the tray so the **bed contact is at `z = 0`**. All overhang checks assume that export transform.
+Internal T joints use the same 0.2 mm overlap instead of a face that only touches.
 
-Lid target: same formula with `internalBoxTopHeightZMm`, after `rb_mirror_y`. Same bed orientation and same export translate.
+The lid still closes because the divider tops stay 0.5 mm under the parting plane and the lid cavity is empty. `openingTolerance` (0.1 mm) is the extra gap between the two shells; do not subtract it again.
 
 ---
 
-## 6. Printability (30° rule audit)
+## 6. Printability audit of the geometry V1.4 now owns
 
-### 6.1 Construction rules (implementation)
+V1.3 is unchanged on disk. These are edits inside the copy in V1.4. Line numbers are V1.3's, so the copy can be checked against them.
 
-- **Floor:** one `linear_extrude(dividerFloorThickness)` of the tray floor polygon (intersection of cavity plan with compartment layout). Top face is +Z (up); bottom is bed — **compliant**.
-- **Dividers:** one `linear_extrude(wall_h)` per wall rectangle, axis **Z** only. No `rotate_extrude`, no `hull()` that adds sloped faces, no `minkowski()` with a sphere.
-- **Clip:** floor plan from `projection(cut=true)`; **vertical** extrusion only. The V1.3 `Wall2D` fillet is used to **define the void** for that projection, not swept onto the tray solid (see §1.3). **Compliant.**
-- **Forbidden on tray solids:** underside chamfers, draft angles &lt; 60° from horizontal, radius rounds on the **bottom** edge, pockets with horizontal roofs, bridge spans between dividers, lightening grids.
-- If a **top edge** feature is ever needed (e.g. a pull tab), chamfer the **outer top** only (up-facing mold); never the underside.
-
-### 6.2 Feature-by-feature compliance
-
-| Feature | Complies? | Notes |
-|---------|-----------|--------|
-| Tray floor (solid) | Yes | Plate at `z=0`; thickness extruded +Z. |
-| Divider walls (vertical) | Yes | Side normals horizontal (`n_z = 0`), not downward. |
-| Divider wall **tops** | Yes | Horizontal face normal **+Z** (upward), not a downward ceiling. |
-| Divider–divider T joints | Yes | 90° vertical intersections only; no fillet wedges on undersides. |
-| Divider–perimeter (cavity clip) | Yes | Walls truncated by vertical floor outline; no sloped cavity fillet on tray. |
-| Floor outline corners (plan) | Yes | Vertical extrusion → vertical exterior corners; no 45° bottom chamfer. |
-| `dividerFloorThickness = 0` (walls-only) | Yes | Walls rest on bed; no bridging between wall bases. |
-| Uniform grid / nested tree layouts | Yes | Topology only; does not add slopes. |
-| Lid tray (Phase 3) | Yes | Same mesh rules; `rb_mirror_y` is layout-only, then same Z-up export. |
-| Finger scoops (out of scope) | N/A | Would violate (concave undercuts); remain excluded. |
-| STLBuddy “remove section” / `["open"]` (future) | **Redesign required** | Removing a cell floor exposes the **underside** of neighboring floors (downward horizontal). Future spec: either no open cells, or **per-cell floors** with vertical walls (no shared horizontal shelf), or printable only with support (reject in checker). |
-| Integrated / fused V1.3 bottom (out of scope) | N/A | Not produced by this plan. |
-
-### 6.3 V1.3 geometry (unchanged — information only)
-
-This plan does **not** change `RuggedBoxV1.3.scad`. Jason may print the box as today. Overhangs in V1.3 are **not** fixed here; noted for context:
-
-- **`Wall2D` floor fillet** (lines 1071–1080): inner corner is a circular fillet; when dividers use **`BoxInsert`** chamfer booleans (lines 944–945), end cuts match wall profile — relevant to **built-in** V1.3 dividers, not the drop-in tray.
-- **`BoxShellBase` / hinge / latch / handle**: many slopes and overhangs; standard rugged-box print orientation is outside this insert project.
-- **`CreateBoxInserts`**: blank TPU inserts use the same cavity shell; printing them is separate from the divider tray.
-
-### 6.4 Other FDM defaults
-
-- Default wall 1.2 mm (three 0.4 mm perimeters). `rb_validate` rejects thickness &lt; 1.0 mm.
-- A split closer than the wall thickness to a cell edge is a validation error.
-- Side clearance default 0.1 mm. Note in the header that FDM may want 0.2–0.4 mm.
+| Geometry | As V1.3 prints it | Verdict | V1.4 change |
+|----------|-------------------|---------|-------------|
+| Vertical walls, floor, ribs | Side faces have `n_z = 0`. Floor bottom is the bed. Ribs are vertical extrusions of `Wall2D`. | Pass | Keep. |
+| Inner floor fillet (`Wall2D` lines 1071–1080) | Cove between floor and wall. The air is above it, so the normal points up. | Pass | Keep. This is the V1.3 corner look. |
+| Outer bottom corner (same arc; TODO on line 1023 asks for 60°+) | The outside of that arc runs from the vertical wall to the horizontal floor, so some facets have `n_z < -0.5`. | Fail | Replace the **outer** arc with one chamfer at 60° from horizontal (`n_z = -0.5`). Do not change the inner fillet. |
+| Rim lip (`Wall2D` lines 1051–1063) | The lip is a rectangle `rimWidthMm` wide. The `$fn=4` diamond is cut down to its outer lower edge, so the underside is a **45°** chamfer (`n_z = -cos(45°) ≈ -0.707`). The code comment calls it a 45° chamfer. | Fail | Move that underside from 45° to 60° from horizontal. Over a 2 mm lip the vertical drop becomes `2 * tan(60°) ≈ 3.46 mm` instead of 2 mm, so the slope extends below `rimHeightMm`. The top of the rim stays the flat top of the rectangle. |
+| Circular seal bead and groove (`BoxCircularSealExtrude`, `circle(radius)`) | Full circle. The groove's upper wall and the bead's lower arc face down. | Fail | Tongue and groove with sides at 60° from horizontal, wider at the root of the bead and at the mouth of the groove. Same path around the rim. |
+| Gasket slot (`Gasket2D` is a rectangle) | Vertical slot walls, slot floor faces up. The TPU gasket is a flat extrusion. | Pass | Keep. |
+| Hinge and latch barrels (`cylinder` rotated about X, e.g. lines 786–789) | Horizontal cylinder. The bottom quarter is below 60°. | Fail | Teardrop pointing down: upper half stays circular, lower faces at 60° from horizontal. |
+| Hinge and latch screw holes (horizontal `cylinder` cuts) | Circular hole. The roof of the hole is a downward arc. | Fail | Teardrop pointing up: lower half stays circular (that surface faces up), roof faces at 60° from horizontal. |
+| 45° hinge and latch braces (`rotate([45,0,0])` cubes, lines 804 and 748) | 45° from horizontal, so `n_z = -cos(45°) ≈ -0.707`. | Fail | Same brace, rotated to 60° from horizontal. |
+| Latch body (`linear_extrude` of `StandardLatch2D`, lines 635–637) | Prism in +Z. Screw holes are vertical. | Pass | Keep. |
+| Handle (`hull()` of horizontal cylinders down to a slab, `CaseHandle`) | Convex hull from the bed slab up to the cylinders. Tangents from the slab to the round can be shallower than 60°. | Not safe as copied | Keep the grip outline. Rebuild the sides so every downward face is at 60° or steeper. The checker on `handle.stl` is the gate. |
+| Feet (`Foot`, `isFeetAdded` default false) | Trapezoid prism, then `rotate([90,0,0])`, so the print axis is not the modeled axis. | Re-orient and check | Print with the flat base on `z = 0`. If a side is under 60°, steepen it to 60°. |
+| Fused dividers | Not in V1.3's tree form. V1.3's `BoxInsert` cuts the divider end with `Wall2D`, which is the slope rejected above. | — | Vertical cubes, embedded 0.2 mm, no fillet-shaped end cut (§5). |
+| Lid dividers, finger scoops, open cells | Not built | — | An open cell that removes one compartment floor leaves the neighboring floor as a horizontal underside. Do not add it. A finger scoop is an undercut. Do not add it. |
 
 ---
 
 ## 7. Verification
 
-Pass/fail is the process exit code plus `--hardwarnings`. Do not grep the log for `ERROR`: a no-match `grep` returns 1, so the old snippet failed the run when OpenSCAD succeeded. `-q` is omitted so the `.echo` export still contains the success line.
+Pass/fail is the process exit code plus `--hardwarnings`. Do not grep the log for `ERROR`: a no-match `grep` returns 1, so that fails a successful run. Do not use `-o /dev/null` or `-o NUL`. The export format is the file extension. Assert runs export `.echo`.
 
-**Do not** `-o /dev/null` or `-o NUL`. Assert-only runs export `.echo` ([manual](https://en.wikibooks.org/wiki/OpenSCAD_User_Manual/Using_OpenSCAD_in_a_command_line_environment)). On Windows call `openscad.com`, not `openscad.exe`. PNG preview may need `xvfb-run -a` on headless Linux. `--imgsize` takes `width,height` as one argument.
+On Windows call `openscad.com`, not `openscad.exe`. The `.exe` is a GUI binary and drops stdout. Override with `$env:OPENSCAD` / `$OPENSCAD` when it is not on `PATH`.
 
-### 7.0 Per-part checklist (manual, before merge)
+`--hardwarnings` makes an STL export return non-zero on 2021.01. The same flag's non-zero exit for `.echo` and `.png` is the April 2021 fix, after the 2021.01 tag. Prefer a current build. Any non-zero exit fails the script.
 
-For each exported STL (`preset-0` … `preset-3`, lid preset when present):
+PNG preview needs OpenGL. Headless Linux uses `xvfb-run -a` on the `openscad` binary, not on a shell function. Camera is `--autocenter --viewall`. `--imgsize` takes `width,height` as one argument.
 
-- [ ] Printed orientation documented: floor / wall bases on bed, +Z up.
-- [ ] No `rotate`/`hull`/`minkowski` used for tray/d divider solids (code review).
-- [ ] No underside chamfer or lip in the SCAD for that export.
-- [ ] `python3 Boxes/tests/check_overhangs.py <file.stl>` exits 0.
-- [ ] Slicer preview (optional): no support generated with default settings.
+### 7.0 Checklist before merge
 
-### 7.1 Bash (`Boxes/tests/render-presets.sh`)
+For every STL in §7.1:
+
+- [ ] Bed orientation matches the table in the global constraints.
+- [ ] The part is one of: bottom (per preset), lid, latch, handle. Feet and gasket only when those flags are on.
+- [ ] No fillet-shaped divider end, no 45° rim underside, no full-circle hinge hole.
+- [ ] `check_overhangs.py` exits 0.
+
+### 7.1 What gets rendered
+
+Every render also passes `-D generateGasket=false` and `-D generateFeetIfSetInSettings=false`, and leaves `viewBoxClosed` at its default `false`.
+
+Bottoms use V1.3's default 160 × 60 interior. Preset 3's default string (`y32`, `x62`, `x74`) fits that interior. Preset 2 is the one that scales the screenshot proportions. The handle render also passes `-D numberOfLatches=2`, because V1.3 skips the handle when there are fewer than two latches and an empty export is an error.
+
+Latch mounts are part of the bottom and the lid, so `bottom-preset-*.stl` and `lid.stl` cover them. `latch.stl` is only the loose latch bodies.
+
+| STL | Flags |
+|-----|-------|
+| `out/bottom-preset-<n>.stl` | bottom only, preset n |
+| `out/lid.stl` | lid only |
+| `out/latch.stl` | latches only |
+| `out/handle.stl` | handle only |
+
+`generateGasket` and feet stay off in this set. A later optional check can turn them on.
+
+### 7.2 Bash
 
 ```bash
 #!/usr/bin/env bash
@@ -333,39 +288,54 @@ set -eu
 cd "$(dirname "$0")/../.."
 mkdir -p out
 SCAD="${OPENSCAD:-openscad}"
-
-"$SCAD" --hardwarnings -o out/divider-lib-test.echo \
-  Boxes/tests/rugged-box-divider-lib-test.scad
-grep -q "divider-lib-tests ok" out/divider-lib-test.echo
-
 PYTHON="${PYTHON:-python3}"
+
+"$SCAD" --hardwarnings -o out/v14-test.echo Boxes/tests/rugged-box-v14-test.scad
+grep -q "v14-tests ok" out/v14-test.echo
 "$PYTHON" -m unittest discover -s Boxes/tests -p 'test_check_overhangs.py'
 
+OFF="-D generateGasket=false -D generateFeetIfSetInSettings=false"
+
 for p in 0 1 2 3; do
-  "$SCAD" --hardwarnings -o "out/preset-$p.stl" \
+  "$SCAD" --hardwarnings -o "out/bottom-preset-$p.stl" \
     -D dividerLayoutPreset="$p" \
-    Boxes/RuggedBoxV1.4-Inserts.scad
-  "$PYTHON" Boxes/tests/check_overhangs.py "out/preset-$p.stl"
+    -D generateBoxTop=false -D generateLatches=false -D generateHandle=false \
+    $OFF Boxes/RuggedBoxV1.4.scad
+  "$PYTHON" Boxes/tests/check_overhangs.py "out/bottom-preset-$p.stl"
 done
 
-# xvfb-run execs a program. It does not see a shell function, so the
-# openscad arguments are repeated here rather than wrapped in png().
+"$SCAD" --hardwarnings -o out/lid.stl \
+  -D generateBoxBottom=false -D generateBoxTop=true \
+  -D generateLatches=false -D generateHandle=false \
+  $OFF Boxes/RuggedBoxV1.4.scad
+"$PYTHON" Boxes/tests/check_overhangs.py out/lid.stl
+
+"$SCAD" --hardwarnings -o out/latch.stl \
+  -D generateBoxBottom=false -D generateBoxTop=false \
+  -D generateLatches=true -D generateHandle=false \
+  $OFF Boxes/RuggedBoxV1.4.scad
+"$PYTHON" Boxes/tests/check_overhangs.py out/latch.stl
+
+"$SCAD" --hardwarnings -o out/handle.stl \
+  -D generateBoxBottom=false -D generateBoxTop=false \
+  -D generateLatches=false -D generateHandle=true -D numberOfLatches=2 \
+  $OFF Boxes/RuggedBoxV1.4.scad
+"$PYTHON" Boxes/tests/check_overhangs.py out/handle.stl
+
 if command -v xvfb-run >/dev/null; then
   xvfb-run -a "$SCAD" --hardwarnings --autocenter --viewall --imgsize 800,600 \
-    -D dividerLayoutPreset=2 \
-    -o out/nested_demo.png Boxes/RuggedBoxV1.4-Inserts.scad
+    -D viewBoxClosed=true -D generateLatches=false -D generateHandle=false \
+    -o out/closed-preview.png Boxes/RuggedBoxV1.4.scad
 else
   "$SCAD" --hardwarnings --autocenter --viewall --imgsize 800,600 \
-    -D dividerLayoutPreset=2 \
-    -o out/nested_demo.png Boxes/RuggedBoxV1.4-Inserts.scad
+    -D viewBoxClosed=true -D generateLatches=false -D generateHandle=false \
+    -o out/closed-preview.png Boxes/RuggedBoxV1.4.scad
 fi
 ```
 
-Preset 3 is the screenshot string left at its default, so the parser is on the render path too.
+### 7.3 PowerShell 5.1
 
-### 7.2 Windows PowerShell 5.1 (`Boxes/tests/render-presets.ps1`)
-
-`$ErrorActionPreference = "Stop"` is wrong here: PowerShell 5.1 turns native stderr into an error record and aborts even when OpenSCAD exits 0. Call `openscad.com` with the call operator so each argument is a separate argv token (no `cmd /c` quoting). `$LASTEXITCODE` is the pass/fail signal. Do not grep a log for `ERROR`.
+`$ErrorActionPreference = "Stop"` aborts a native program that writes to stderr even when the exit code is 0. Leave it at `Continue` and use `$LASTEXITCODE`. Call `openscad.com` with the call operator so each argument is one argv token.
 
 ```powershell
 $ErrorActionPreference = "Continue"
@@ -373,78 +343,94 @@ $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Set-Location $repo
 New-Item -ItemType Directory -Force -Path (Join-Path $repo "out") | Out-Null
 $scad = if ($env:OPENSCAD) { $env:OPENSCAD } else { "openscad.com" }
+$py = if (Get-Command python -ErrorAction SilentlyContinue) { "python" } else { "py" }
 
 function Invoke-OpenSCAD([string[]]$ScadArgs) {
     & $scad @ScadArgs
     if ($LASTEXITCODE -ne 0) { throw "openscad exited $LASTEXITCODE" }
 }
+function Invoke-Check([string]$Stl) {
+    & $py Boxes\tests\check_overhangs.py $Stl
+    if ($LASTEXITCODE -ne 0) { throw "overhang check failed: $Stl" }
+}
 
-Invoke-OpenSCAD @(
-    "--hardwarnings", "-o", "out\divider-lib-test.echo",
-    "Boxes\tests\rugged-box-divider-lib-test.scad"
-)
-$echo = Get-Content "out\divider-lib-test.echo" -Raw
-if ($echo -notmatch "divider-lib-tests ok") { throw "assert run did not report success" }
-
-$py = if (Get-Command python -ErrorAction SilentlyContinue) { "python" } else { "py" }
+Invoke-OpenSCAD @("--hardwarnings","-o","out\v14-test.echo","Boxes\tests\rugged-box-v14-test.scad")
+$echo = Get-Content "out\v14-test.echo" -Raw
+if ($echo -notmatch "v14-tests ok") { throw "assert run did not report success" }
 & $py -m unittest discover -s Boxes/tests -p 'test_check_overhangs.py'
-if ($LASTEXITCODE -ne 0) { throw "check_overhangs unit tests failed" }
+if ($LASTEXITCODE -ne 0) { throw "overhang unit tests failed" }
 
 foreach ($p in 0, 1, 2, 3) {
     Invoke-OpenSCAD @(
-        "--hardwarnings", "-o", "out\preset-$p.stl",
-        "-D", "dividerLayoutPreset=$p",
-        "Boxes\RuggedBoxV1.4-Inserts.scad"
-    )
-    & $py Boxes\tests\check_overhangs.py "out\preset-$p.stl"
-    if ($LASTEXITCODE -ne 0) { throw "overhang check failed for preset $p" }
+        "--hardwarnings","-o","out\bottom-preset-$p.stl",
+        "-D","dividerLayoutPreset=$p",
+        "-D","generateBoxTop=false","-D","generateLatches=false","-D","generateHandle=false",
+        "-D","generateGasket=false","-D","generateFeetIfSetInSettings=false",
+        "Boxes\RuggedBoxV1.4.scad")
+    Invoke-Check "out\bottom-preset-$p.stl"
 }
 Invoke-OpenSCAD @(
-    "--hardwarnings", "--autocenter", "--viewall", "--imgsize", "800,600",
-    "-D", "dividerLayoutPreset=2",
-    "-o", "out\nested_demo.png",
-    "Boxes\RuggedBoxV1.4-Inserts.scad"
-)
+    "--hardwarnings","-o","out\lid.stl",
+    "-D","generateBoxBottom=false","-D","generateBoxTop=true",
+    "-D","generateLatches=false","-D","generateHandle=false",
+    "-D","generateGasket=false","-D","generateFeetIfSetInSettings=false",
+    "Boxes\RuggedBoxV1.4.scad")
+Invoke-Check "out\lid.stl"
+Invoke-OpenSCAD @(
+    "--hardwarnings","-o","out\latch.stl",
+    "-D","generateBoxBottom=false","-D","generateBoxTop=false",
+    "-D","generateLatches=true","-D","generateHandle=false",
+    "-D","generateGasket=false","-D","generateFeetIfSetInSettings=false",
+    "Boxes\RuggedBoxV1.4.scad")
+Invoke-Check "out\latch.stl"
+Invoke-OpenSCAD @(
+    "--hardwarnings","-o","out\handle.stl",
+    "-D","generateBoxBottom=false","-D","generateBoxTop=false",
+    "-D","generateLatches=false","-D","generateHandle=true","-D","numberOfLatches=2",
+    "-D","generateGasket=false","-D","generateFeetIfSetInSettings=false",
+    "Boxes\RuggedBoxV1.4.scad")
+Invoke-Check "out\handle.stl"
 ```
 
-The test file ends with `echo("divider-lib-tests ok");` after the asserts. A failed `assert` is a non-zero exit and never reaches that echo.
+### 7.4 Overhang checker
 
-PNG on a Windows box with a desktop session does not need Xvfb. Attach `out/nested_demo.png` and name the STL paths in the implementation PR.
-
-### 7.3 Overhang checker (automated)
-
-**Math (unit outward normal `n`, bed at `z = 0`, build direction +Z):**
-
-- A triangle **violates** the 30°-from-vertical rule if it is **downward-facing** and too shallow:
-  - **`n_z < -sin(30°) = -0.5`** (more than 30° from vertical toward the bed).
-- **Excluded:** triangles whose three vertices all have **`z ≤ z_bed_eps`** (default `z_bed_eps = 0.05` mm) — build-plate contact.
-- Upward faces (`n_z ≥ 0`) never violate.
-
-Report each violation: triangle index, `n`, centroid, `max_z`.
-
-**CLI:**
+Recompute the normal from the vertices. Do not trust the normal stored in the STL; a flipped winding would hide every overhang.
 
 ```text
-python3 Boxes/tests/check_overhangs.py [--z-bed-eps 0.05] [--min-angle-deg 30] file.stl ...
+n = normalize( (v1 - v0) × (v2 - v0) )
 ```
 
-Exit **0** if none; **1** if any; **2** on parse error. Python **3.8+**, stdlib only (ASCII/binary STL).
+If the mesh volume is negative, flip every `n` before testing. Skip a triangle whose area is under `1e-12`.
 
-**Unit tests** (`Boxes/tests/test_check_overhangs.py`, `unittest`):
+A triangle **fails** when its unit normal has `n_z < -0.5`.
+
+**Bed contact, the only exclusion:** centroid `z ≤ 0.05` and `n_z < -0.99`. That is the flat bottom on the plate. Do not skip every triangle that merely has a vertex near `z = 0`. A chamfer that leaves the bed at 45° has `n_z ≈ -0.707` and must fail even if one edge touches `z = 0`.
+
+Upward faces (`n_z ≥ 0`) pass. A vertical wall (`n_z = 0`) passes.
+
+ASCII vs binary: if the first 2 KB contains `facet normal`, parse ASCII. Otherwise parse binary. A binary header may start with the letters `solid`, so that word is not the test.
+
+```text
+python3 Boxes/tests/check_overhangs.py [--z-bed-eps 0.05] file.stl ...
+```
+
+Exit 0 if none fail, 1 if any fail, 2 if the file cannot be parsed. Python 3.8+, stdlib only. Windows: `python` or `py`. Linux: `python3`.
+
+Unit tests, written as small STL buffers in memory (no checked-in binary):
 
 | Case | Expect |
 |------|--------|
-| Synthetic box 10×10×5 mm on bed | pass |
-| Box + triangle normal `(0,0,-1)` at `z = 2` | fail |
-| Normal `(0,0,-1)` at `z = 0.01` | pass (bed band) |
-| `n_z = -0.4` at `z = 2` | pass (≤ 30° from vertical) |
+| Box 10×10×5 on the bed, outward normals | pass |
+| Same box with all windings reversed (negative volume) | pass, after the flip |
+| Extra triangle, `n_z = -1`, centroid `z = 2` | fail |
+| Extra triangle, `n_z = -1`, centroid `z = 0` | pass (bed) |
+| Extra triangle, `n_z = -0.7`, one edge at `z = 0`, centroid `z = 0.2` | fail (not bed; 45° class) |
+| `n_z = -0.4` at `z = 2` | pass (about 66° from horizontal) |
+| `n_z = -0.5` at `z = 2` | pass (exactly 60°) |
 | `n_z = -0.6` at `z = 2` | fail |
+| `n_z = +1` at `z = 5` | pass |
 
-From repo root: `python3 -m unittest discover -s Boxes/tests -p 'test_check_overhangs.py'` (Windows: `python` / `py -3`).
-
-**Integration:** §7.1 and §7.2 run this checker on every exported STL after Phase 2.
-
-**Horizontal holes (future):** teardrop or diamond profile; add golden STL to unit tests. None in Phases 1–3.
+From the repo root: `python3 -m unittest discover -s Boxes/tests -p 'test_check_overhangs.py'`.
 
 ---
 
@@ -452,28 +438,29 @@ From repo root: `python3 -m unittest discover -s Boxes/tests -p 'test_check_over
 
 ### Phase 0 — this plan
 
-- [x] Review against `RuggedBoxV1.3.scad` and correct the cavity, the tree, and the CLI commands.
-- [x] Add Jason's 30°-from-vertical overhang rule, audit, and verification plan.
+- [x] Standalone V1.4, fused dividers, overhang audit of the copied geometry.
 - **Done when:** Jason says to build. No `.scad` in this phase.
 
-### Phase 1 — functions + overhang checker
+### Phase 1 — helpers and the checker
 
-- [ ] Add the library functions in §3.3. No mesh, no copied `Wall2D` yet.
-- [ ] Add the OpenSCAD test file. Every function in the table has its assert.
-- [ ] Add `check_overhangs.py` and `test_check_overhangs.py` (synthetic STLs only).
-- **Done when:** `.echo` step exits 0; `unittest discover … test_check_overhangs.py` exits 0 on Windows and Linux. STL/overhang-on-export waits for Phase 2.
+- [ ] Divider functions in §3.3, in the new file.
+- [ ] `rugged-box-v14-test.scad` with one assert per function.
+- [ ] `check_overhangs.py` and `test_check_overhangs.py`.
+- **Done when:** the `.echo` step exits 0 and the unittest exits 0 on Windows and Linux. No box STL yet.
 
-### Phase 2 — bottom tray
+### Phase 2 — shell, lid, hinges, latches, handle
 
-- [ ] Copy `Wall2D`, rib-free `BoxShellBase`, and the cavity difference. Extrude the tray from the floor-level `projection(cut=true)`; **translate so bed is `z = 0`**.
-- [ ] Entry file, presets 0–3, screenshot size 100 × 80. Geometry per §6.1 only.
-- [ ] Wire full render scripts (STL, PNG, overhang check per preset).
-- **Done when:** four STLs exit 0 under `--hardwarnings`; **`check_overhangs.py` exits 0 on each**; preset 0 is floor-only; `out/nested_demo.png` shows one cross-divider plus a column in each band; §7.0 checklist signed off.
+- [ ] Copy the V1.3 modules in §1.2 into `RuggedBoxV1.4.scad` and apply every V1.4 change in the §6 table. No dividers yet (`dividerLayoutPreset` default 0 during this phase's first render).
+- [ ] Parameter names and defaults match §3.2.
+- **Done when:** `lid.stl`, `latch.stl`, and `handle.stl` each exit 0 under `--hardwarnings` and under `check_overhangs.py`. A bottom STL with preset 0 (empty interior) does too.
 
-### Phase 3 — lid tray
+### Phase 3 — fused dividers
 
-- [ ] `dividerTarget = "lid"` uses lid height and `rb_mirror_y`. Same Z-up bed orientation as bottom tray.
-- **Done when:** lid STL exits 0 under `--hardwarnings`; **`check_overhangs.py` exits 0**; Y-mirror assert passes; §7.0 checklist for lid STL.
+- [ ] Union the tree into the bottom as in §5.
+- [ ] Presets 0–3.
+- **Done when:** `bottom-preset-0` through `bottom-preset-3` each pass `--hardwarnings` and `check_overhangs.py`. Preset 0 has no divider walls. Preset 2 shows one cross-divider and a column in each band. `closed-preview.png` shows the lid on the bottom. §7.0 is checked off.
+
+Lid dividers are not a phase of this plan.
 
 ---
 
@@ -481,10 +468,15 @@ From repo root: `python3 -m unittest discover -s Boxes/tests -p 'test_check_over
 
 | Question | Recommended default |
 |----------|---------------------|
-| Tray vs. dividers fused into the V1.3 shell? | **Tray.** Fusing means editing V1.3 or copying `BoxBottom`. Out of this build. |
-| Where does the nested layout get edited? | **Preset dropdown, plus one millimeter string** for preset 3. Nested lists stay off the Customizer. |
-| Fractions in the string? | **No.** Millimeters, matching the 73.92 mm slider. Presets recompute mm from the cavity size. |
-| STLBuddy "remove section"? | **Not in this build.** A future `["open"]` leaf must not leave a shared horizontal shelf under neighbors (would fail the 30° rule); use per-cell floors or reject in the checker. |
-| Finger scoops? | **Not in this build.** |
-| Lid tray? | **Phase 3**, Y-mirror only, default target stays the bottom. |
-| Should V1.3 later call this library? | **Separate decision.** Not part of building the tray. |
+| File name? | `Boxes/RuggedBoxV1.4.scad`. It is the whole box. V1.3 stays as the previous version. |
+| Include V1.3? | **No.** Copy the modules in. No `include`, no `use`. |
+| Tray or fused? | **Fused into the bottom.** No tray parameters. |
+| Lid dividers? | **No.** Empty lid. Bottom divider tops 0.5 mm under the parting plane. |
+| How is a nested layout edited? | Preset dropdown, plus one millimeter string for preset 3. |
+| Fractions in the string? | **No.** Millimeters. Preset 2 stores fractions in code and converts them using the current interior. |
+| Outer bottom corner? | **60° chamfer.** Inner fillet stays, so the cavity still looks like V1.3. |
+| Hinge and latch rounds? | **Teardrop** at 60° from horizontal. Screw pin, not a printed pin. |
+| Circular seal? | **60° tongue and groove.** Gasket mode stays rectangular. |
+| Handle and feet? | **Keep.** Steepen any side that fails the checker. Feet stay off by default. |
+| Open cells, finger scoops? | **Not in this build.** |
+| Should V1.3 later call this file? | **No.** They stay separate. |
