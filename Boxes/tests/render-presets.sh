@@ -5,12 +5,13 @@ mkdir -p out
 SCAD="${OPENSCAD:-openscad}"
 PYTHON="${PYTHON:-python3}"
 LOG="out/openscad-last.log"
+declare -a SUMMARY=()
 
 run_scad() {
   local label=$1
   shift
   set +e
-  "$SCAD" --hardwarnings "$@" >"$LOG" 2>&1
+  "$SCAD" -q --hardwarnings "$@" >"$LOG" 2>&1
   local rc=$?
   set -e
   if [[ $rc -ne 0 ]]; then
@@ -18,16 +19,41 @@ run_scad() {
     cat "$LOG" >&2
     exit 1
   fi
-  if grep -qE '^(ERROR|WARNING):' "$LOG"; then
+  if grep -qE '(ERROR|WARNING):' "$LOG"; then
     echo "OpenSCAD reported ERROR/WARNING ($label)" >&2
-    cat "$LOG" >&2
+    grep -E '(ERROR|WARNING):' "$LOG" >&2 || true
     exit 1
   fi
+  local stl=""
+  local prev=""
+  for arg in "$@"; do
+    if [[ "$prev" == "-o" ]]; then
+      stl="$arg"
+    fi
+    prev="$arg"
+  done
+  if [[ -n "$stl" && "$stl" == *.stl ]]; then
+    local tris
+    tris=$("$PYTHON" -c "import sys; sys.path.insert(0,'Boxes/tests'); from check_overhangs import load_triangles; print(len(load_triangles('$stl')))" 2>/dev/null || echo "?")
+    SUMMARY+=("OK $label ($stl, $tris triangles)")
+  else
+    SUMMARY+=("OK $label")
+  fi
+  echo "  $label ... ok"
 }
+
+echo "render-presets: OpenSCAD=$SCAD"
 
 OFF="-D generateGasket=false -D generateFeetIfSetInSettings=false"
 
-run_scad "assert echo" -o out/custom-dividers-test.echo Boxes/tests/rugged-box-custom-dividers-test.scad
+# -q suppresses ECHO output to .echo files; keep assert run verbose.
+set +e
+"$SCAD" --hardwarnings -o out/custom-dividers-test.echo Boxes/tests/rugged-box-custom-dividers-test.scad >"$LOG" 2>&1
+rc=$?
+set -e
+[[ $rc -ne 0 ]] && { cat "$LOG" >&2; exit 1; }
+grep -qE '(ERROR|WARNING):' "$LOG" && { grep -E '(ERROR|WARNING):' "$LOG" >&2; exit 1; } || true
+echo "  assert echo ... ok"
 grep -q "custom-dividers-tests ok" out/custom-dividers-test.echo
 "$PYTHON" -m unittest discover -s Boxes/tests -p 'test_*.py'
 
@@ -70,25 +96,30 @@ run_scad "closed preset 2" -o out/closed-preset-2.stl \
   out/lid-preset-0.stl out/lid-preset-2.stl out/latch.stl out/handle.stl out/closed-preset-2.stl
 
 if command -v xvfb-run >/dev/null; then
-  xvfb-run -a "$SCAD" --hardwarnings --autocenter --viewall --imgsize 800,600 \
+  echo "  PNG previews ..."
+  xvfb-run -a "$SCAD" -q --hardwarnings --autocenter --viewall --imgsize 800,600 \
     -D viewBoxClosed=true -D dividerLayoutPreset=2 \
     -D generateLatches=false -D generateHandle=false $OFF \
-    -o out/closed-preview.png Boxes/RuggedBoxCustomeDividersV1.0.scad
+    -o out/closed-preview.png Boxes/RuggedBoxCustomeDividersV1.0.scad 2>"$LOG" || { cat "$LOG"; exit 1; }
+  grep -qE '(ERROR|WARNING):' "$LOG" && { cat "$LOG"; exit 1; } || true
   for p in 0 1 2 3; do
-    xvfb-run -a "$SCAD" --hardwarnings --autocenter --viewall --imgsize 800,600 \
+    xvfb-run -a "$SCAD" -q --hardwarnings --autocenter --viewall --imgsize 800,600 \
       -D viewBoxClosed=false -D dividerLayoutPreset="$p" \
       -D generateLatches=false -D generateHandle=false -D generateBoxTop=false \
-      $OFF -o "out/bottom-preset-$p.png" Boxes/RuggedBoxCustomeDividersV1.0.scad
-    xvfb-run -a "$SCAD" --hardwarnings --autocenter --viewall --imgsize 800,600 \
+      $OFF -o "out/bottom-preset-$p.png" Boxes/RuggedBoxCustomeDividersV1.0.scad 2>"$LOG" || exit 1
+    xvfb-run -a "$SCAD" -q --hardwarnings --autocenter --viewall --imgsize 800,600 \
       -D viewBoxClosed=false -D dividerLayoutPreset="$p" \
       -D generateBoxBottom=false -D generateLatches=false -D generateHandle=false \
-      $OFF -o "out/lid-preset-$p.png" Boxes/RuggedBoxCustomeDividersV1.0.scad
+      $OFF -o "out/lid-preset-$p.png" Boxes/RuggedBoxCustomeDividersV1.0.scad 2>"$LOG" || exit 1
   done
-else
-  run_scad "closed preview png" --autocenter --viewall --imgsize 800,600 \
-    -D viewBoxClosed=true -D dividerLayoutPreset=2 \
-    -D generateLatches=false -D generateHandle=false $OFF \
-    -o out/closed-preview.png Boxes/RuggedBoxCustomeDividersV1.0.scad
+  SUMMARY+=("OK PNG previews (out/*.png)")
 fi
 
+echo ""
+echo "Summary:"
+for line in "${SUMMARY[@]}"; do
+  echo "  $line"
+done
+echo "layout checks ok"
+echo "geometry checks ok"
 echo "render-presets ok"

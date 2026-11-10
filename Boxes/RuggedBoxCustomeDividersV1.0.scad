@@ -591,12 +591,35 @@ function _rb_groove_profile_points(r) =
     let(jy = r / 2)
     [[-jx, jy], [jx, jy], [0, -r]];
 
+// rotate_extrude profiles must not cross the Y axis (all x strictly >= 0).
+function _rb_groove_profile_rx_points(r) =
+    let(jx = r * sqrt(3) / 2)
+    let(jy = r / 2)
+    let(e = 0.02)
+    [[0, jy + e], [2 * jx + e, jy + e], [jx, -r - e], [e, -r - e]];
+
+function _rb_bead_profile_rx_points(r, fn) =
+    let(steps = max(24, fn))
+    let(jx = r * sqrt(3) / 2)
+    let(jy = r / 2)
+    let(e = 0.02)
+    let(arc = [for (i = [0 : steps - 1]) let(a = 90 + i * 90 / steps) [r * cos(a) + e, r * sin(a)]])
+    concat([[e, -r - e], [e, jy + e]], arc, [[jx + e, jy + e]]);
+
 module rb_bead_profile(r, $fn = 24) {
     polygon(_rb_bead_profile_points(r, $fn));
 }
 
+module rb_bead_profile_rx(r, $fn = 24) {
+    polygon(_rb_bead_profile_rx_points(r, $fn));
+}
+
 module rb_groove_profile(r) {
     polygon(_rb_groove_profile_points(r));
+}
+
+module rb_groove_profile_rx(r) {
+    polygon(_rb_groove_profile_rx_points(r));
 }
 
 module rb_tongue_groove_circle(r, $fn = 24) {
@@ -771,6 +794,14 @@ module BoxCircularSealExtrude(radius, zOffset, is_subtractive = false) {
         }
     }
 
+    module _seal_profile_rx() {
+        if (is_subtractive) {
+            rb_groove_profile_rx(radius);
+        } else {
+            rb_bead_profile_rx(radius, $fn = 64);
+        }
+    }
+
     translate([pivotDistanceFromWall,boxWallWidthMm-((boxWallWidthMm+rimWidthMm)/2),zOffset]) 
         rotate([0,90,0]) linear_extrude(boxWidthXMm-(2*pivotDistanceFromWall)) _seal_profile();
     translate([pivotDistanceFromWall,boxLengthYMm-boxWallWidthMm+((boxWallWidthMm+rimWidthMm)/2),zOffset]) 
@@ -781,13 +812,13 @@ module BoxCircularSealExtrude(radius, zOffset, is_subtractive = false) {
         rotate([-90,0,0]) linear_extrude(boxLengthYMm-(2*pivotDistanceFromWall)) _seal_profile();
 
     translate([pivotDistanceFromWall,pivotDistanceFromWall,zOffset]) 
-        rotate([0,0,180]) rotate_extrude(angle = 90, $fn=polyLvl) translate([(pivotDistanceFromWall+(pivotDistanceFromWall-boxWallWidthMm)+rimWidthMm)/2,0]) _seal_profile();
+        rotate([0,0,180]) rotate_extrude(angle = 90, $fn=polyLvl) translate([(pivotDistanceFromWall+(pivotDistanceFromWall-boxWallWidthMm)+rimWidthMm)/2,0]) _seal_profile_rx();
     translate([pivotDistanceFromWall,boxLengthYMm-pivotDistanceFromWall,zOffset]) 
-        rotate([0,0,90]) rotate_extrude(angle = 90, $fn=polyLvl) translate([(pivotDistanceFromWall+(pivotDistanceFromWall-boxWallWidthMm)+rimWidthMm)/2,0]) _seal_profile();
+        rotate([0,0,90]) rotate_extrude(angle = 90, $fn=polyLvl) translate([(pivotDistanceFromWall+(pivotDistanceFromWall-boxWallWidthMm)+rimWidthMm)/2,0]) _seal_profile_rx();
     translate([pivotDistanceFromWall+boxWidthXMm-(2*pivotDistanceFromWall),boxLengthYMm-pivotDistanceFromWall,zOffset]) 
-        rotate([0,0,0]) rotate_extrude(angle = 90, $fn=polyLvl) translate([(pivotDistanceFromWall+(pivotDistanceFromWall-boxWallWidthMm)+rimWidthMm)/2,0]) _seal_profile();
+        rotate([0,0,0]) rotate_extrude(angle = 90, $fn=polyLvl) translate([(pivotDistanceFromWall+(pivotDistanceFromWall-boxWallWidthMm)+rimWidthMm)/2,0]) _seal_profile_rx();
     translate([pivotDistanceFromWall+boxWidthXMm-(2*pivotDistanceFromWall),pivotDistanceFromWall,zOffset]) 
-        rotate([0,0,270]) rotate_extrude(angle = 90, $fn=polyLvl) translate([(pivotDistanceFromWall+(pivotDistanceFromWall-boxWallWidthMm)+rimWidthMm)/2,0]) _seal_profile();
+        rotate([0,0,270]) rotate_extrude(angle = 90, $fn=polyLvl) translate([(pivotDistanceFromWall+(pivotDistanceFromWall-boxWallWidthMm)+rimWidthMm)/2,0]) _seal_profile_rx();
 
 }
 
@@ -1243,12 +1274,12 @@ module Wall2D(wallThickness, additionalWallThickness, height, isRimIncluded, isF
         
         if (additionalWallThickness > 0) {
             top_trim = additionalWallThickness + wallThickness * 2;
+            top_trim_drop = top_trim / tan(60);
             translate([-boxChamferRadiusMm - additionalWallThickness - 0.05, 0.05])
-                polygon([
-                    [0, 0],
-                    [top_trim, 0],
-                    [0, -top_trim / tan(60)]
-                ]);
+                difference() {
+                    square([top_trim + 0.1, top_trim_drop + 0.1]);
+                    translate([0.05, 0.05]) square([top_trim, top_trim_drop]);
+                }
         }
         
         // If we are rotating, we need to cut off any execess floor or wall on the other side of the y axis
