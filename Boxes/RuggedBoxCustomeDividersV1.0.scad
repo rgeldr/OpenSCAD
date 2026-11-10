@@ -245,21 +245,36 @@ previewHingeLatchMounts = is_undef(previewHingeLatchMounts) ? false : previewHin
 previewHingeLatchPart = is_undef(previewHingeLatchPart) ? "bottom" : previewHingeLatchPart;
 
 if (previewHingeLatchMounts) {
+    // Same placement as BoxBottom / BoxTop. LatchMount already moves itself to the front wall.
     if (previewHingeLatchPart == "bottom") {
         union() {
             BotomStandardHinge();
-            translate([boxWidthXMm, 0, 0]) rotate([0, 0, 180]) translate([0, -boxLengthYMm, 0])
-                LatchMount(
-                    latchSupportTotalWidth,
-                    latchSupportWidth,
-                    latchScrewPositionPct,
-                    boxBottomHeightZMm,
-                    latchSupportRadius,
-                    latchToloerance
-                );
+            LatchMount(
+                latchSupportTotalWidth,
+                latchSupportWidth,
+                latchScrewPositionPct,
+                boxBottomHeightZMm,
+                latchSupportRadius,
+                latchToloerance
+            );
         }
     } else if (previewHingeLatchPart == "lid") {
-        TopStandardHinge();
+        union() {
+            TopStandardHinge();
+            translate([boxWidthXMm, 0, 0])
+                rotate([0, 0, 180])
+                    translate([0, -boxLengthYMm, 0])
+                        rotate([180, 0, 0])
+                            translate([0, -boxLengthYMm, -openingTolerance])
+                                LatchMount(
+                                    latchSupportTotalWidth,
+                                    latchSupportWidth,
+                                    latchScrewPositionPct,
+                                    boxTopHeightZMm,
+                                    latchSupportRadius,
+                                    latchToloerance
+                                );
+        }
     } else {
         assert(false, str("previewHingeLatchPart must be bottom or lid, got ", previewHingeLatchPart));
     }
@@ -589,16 +604,38 @@ module rb_teardrop_cylinder_x(length, r, tip_down = true) {
             rb_printable_teardrop_2d(r);
 }
 
-// Printable screw bores only (teardrop). Knuckle barrels match RuggedBoxV1.3 cylinders.
+// Outer radius is at least the V1.3 cylinder and at least screw_radius + min_wall.
 function rb_knuckle_outer_radius(support_radius, screw_radius, min_wall = 3) =
     max(support_radius, screw_radius + min_wall);
 
+// Circle of radius r, plus 60° caps outside the circle (tips at y = ±2r).
+// The disk of radius r is solid, so the barrel is at least as strong as a V1.3 cylinder.
+// Caps are tangent, so every downward face is 60° from horizontal.
+function rb_strong_barrel_points(r, step = 6) =
+    concat(
+        [[0, -2 * r]],
+        [for (a = [-30 : step : 30]) [r * cos(a), r * sin(a)]],
+        [[0, 2 * r]],
+        [for (a = [150 : step : 210]) [r * cos(a), r * sin(a)]]
+    );
+
+// Screw bore: full circle of radius r (the pin fits) plus a 60° roof to y = +2r.
+function rb_screw_bore_points(r, step = 6) =
+    concat(
+        [[0, 2 * r]],
+        [for (a = [30 : -step : -210]) [r * cos(a), r * sin(a)]]
+    );
+
 module rb_knuckle_solid_x(length, radius, tip_down = true) {
-    // Full-round teardrop barrel (60° tip); smoother arc than rb_teardrop_cylinder_x (n_arc=3).
+    // tip_down puts the print cap on world -Z. The lid print pose flips Z, so it passes tip_down=false.
+    // rotate([0,90,0]) after rot Z +90 maps polygon +Y to world +Z and polygon +X to world +Y.
+    // Vertices sit outside the nominal circle so facet chords do not cut inside it.
+    step = 6;
+    r_out = radius / cos(step / 2);
     rotate([0, 90, 0])
         linear_extrude(height = length, center = false)
             rotate([0, 0, tip_down ? 90 : -90])
-                polygon(_rb_teardrop_down_points(radius, 18));
+                polygon(rb_strong_barrel_points(r_out, step));
 }
 
 module rb_knuckle_bar_x(length, radius, tip_down = true) {
@@ -606,22 +643,34 @@ module rb_knuckle_bar_x(length, radius, tip_down = true) {
 }
 
 module rb_screw_hole_x(length, radius, roof_up = true) {
+    // roof_up puts the bore roof on world +Z. The lid print pose passes roof_up=false.
     rotate([0, 90, 0])
         linear_extrude(height = length, center = false)
-            rb_printable_teardrop_hole_2d(radius, roof_up = roof_up);
+            rotate([0, 0, roof_up ? 90 : -90])
+                polygon(rb_screw_bore_points(radius));
 }
 
-module rb_knuckle_back_gusset_x(thick_x, span_y, height_z) {
-  // Full-width slab from the box wall with a 60° (from horizontal) underside.
-    chamfer = min(height_z, span_y / tan(60));
-    rotate([0, 90, 0])
-        linear_extrude(height = thick_x)
-            polygon([
-                [0, 0],
-                [span_y, 0],
-                [span_y, max(0, height_z - chamfer)],
-                [0, height_z]
-            ]);
+// Full knuckle width. Parallelogram in the YZ plane: long faces 62° from horizontal
+// (steeper than the 60° gate so facets still pass), short ends vertical.
+// z_sign is -1 when print-down is -Z. Thickness is added toward print-up so the
+// foot does not grow through the bed; perpendicular thickness is radius*cos(62°).
+module rb_full_width_gusset(x0, width, y_center, z_center, y_wall_outer, radius, z_sign) {
+    y_embed = y_wall_outer - boxWallWidthMm - 0.4;
+    y_nose = y_center - 0.25 * radius;
+    dy = y_nose - y_embed;
+    z_nose = z_center;
+    z_wall = z_nose + z_sign * dy * tan(62);
+    z_thick = -z_sign * radius * 1.5;
+    // polygon (z, y); rot Y -90 maps that to world (X extrude, Y, Z).
+    translate([x0 + width, 0, 0])
+        rotate([0, -90, 0])
+            linear_extrude(height = width, center = false)
+                polygon([
+                    [z_wall, y_embed],
+                    [z_nose, y_nose],
+                    [z_nose + z_thick, y_nose],
+                    [z_wall + z_thick, y_embed]
+                ]);
 }
 
 module rb_vertical_rib_profile_2d(w, h) {
@@ -991,7 +1040,7 @@ module StandardLatch2D(latchSupportTotalWidth, latchSupportWidth, latchScrewPosi
 
 
 
-module LatchMount(latchSupportTotalWidth, latchSupportWidth, latchScrewPositionPct, caseSectionHeight, latchSupportRadius, latchToloerance) {
+module LatchMount(latchSupportTotalWidth, latchSupportWidth, latchScrewPositionPct, caseSectionHeight, latchSupportRadius, latchToloerance, gussetZSign = -1, knuckleTipDown = true, screwRoofUp = true) {
     
     latchPolyLvl = polyLvl <= 8 ? 8 : polyLvl;
     latchInsideWidthMm = latchSupportTotalWidth - (2*latchSupportWidth) - (2*latchToloerance);
@@ -1012,35 +1061,26 @@ module LatchMount(latchSupportTotalWidth, latchSupportWidth, latchScrewPositionP
                 latchMountX = (h*latchSpacing)+((h-1)*latchSupportTotalWidth)+latchSupportWidth+latchToloerance+actualLatchCenterOffsetMm;
                 
                 latchKnuckleR = rb_knuckle_outer_radius(latchSupportRadius, latchScrewSmallRadiusMm);
-                latchGussetSpan = (latchKnuckleR * 2) + rimWidthMm;
-                latchGussetHeight = latchScrewOffsetMm + latchKnuckleR + rimWidthMm;
+                latchAxisY = (boxLengthYMm + latchSupportRadius) + rimWidthMm;
+                latchAxisZ = -latchScrewOffsetMm;
 
                 difference () {
                     union() {
-                        translate([latchMountX-(latchSupportWidth+latchToloerance), (boxLengthYMm+latchSupportRadius)+rimWidthMm, -latchScrewOffsetMm])
-                            rb_knuckle_bar_x(latchSupportWidth, latchKnuckleR);
-                        translate([latchMountX+latchInsideWidthMm+latchToloerance,(boxLengthYMm+latchSupportRadius)+rimWidthMm,-latchScrewOffsetMm])
-                            rb_knuckle_bar_x(latchSupportWidth, latchKnuckleR);
+                        translate([latchMountX-(latchSupportWidth+latchToloerance), latchAxisY, latchAxisZ])
+                            rb_knuckle_bar_x(latchSupportWidth, latchKnuckleR, tip_down = knuckleTipDown);
+                        translate([latchMountX+latchInsideWidthMm+latchToloerance, latchAxisY, latchAxisZ])
+                            rb_knuckle_bar_x(latchSupportWidth, latchKnuckleR, tip_down = knuckleTipDown);
 
                         translate([latchMountX-latchToloerance,boxLengthYMm-(boxChamferRadiusMm),0]) rotate([90,0,-90]) linear_extrude(latchSupportWidth) Wall2D(boxWallWidthMm, (rimWidthMm*2), caseSectionHeight, false);
                         translate([latchMountX+latchInsideWidthMm+latchToloerance+latchSupportWidth,boxLengthYMm-(boxChamferRadiusMm),0]) rotate([90,0,-90]) linear_extrude(latchSupportWidth) Wall2D(boxWallWidthMm, (rimWidthMm*2), caseSectionHeight, false);
 
-                        adjustment = sqrt((latchKnuckleR^2)/2);
-                        hingeConnectorHeight = sqrt(latchKnuckleR^2+latchKnuckleR^2) + (latchKnuckleR-adjustment);
-                        connector_drop = latchKnuckleR * 6;
-                        translate([0, adjustment+rimWidthMm, -(latchKnuckleR-adjustment)-(2*adjustment)-latchScrewOffsetMm])
-                            translate([latchMountX-(latchSupportWidth+latchToloerance),(boxLengthYMm+latchSupportRadius),latchKnuckleR])
-                                rotate([60,0,0])
-                                    translate([0,-connector_drop,0])
-                                        cube([latchSupportWidth, connector_drop, hingeConnectorHeight]);
-                        translate([0, adjustment+rimWidthMm, -(latchKnuckleR-adjustment)-(2*adjustment)-latchScrewOffsetMm])
-                            translate([latchMountX+latchInsideWidthMm+latchToloerance,(boxLengthYMm+latchSupportRadius),latchKnuckleR])
-                                rotate([60,0,0])
-                                    translate([0,-connector_drop,0])
-                                        cube([latchSupportWidth, connector_drop, hingeConnectorHeight]);
+                        // Full knuckle width. Default gussetZSign -1 is print-down for both the
+                        // bottom and the lid latch (BoxTop rotates this mount 180° about X).
+                        rb_full_width_gusset(latchMountX-(latchSupportWidth+latchToloerance), latchSupportWidth, latchAxisY, latchAxisZ, boxLengthYMm, latchKnuckleR, gussetZSign);
+                        rb_full_width_gusset(latchMountX+latchInsideWidthMm+latchToloerance, latchSupportWidth, latchAxisY, latchAxisZ, boxLengthYMm, latchKnuckleR, gussetZSign);
                     };
                     translate([latchMountX-((latchSupportWidth+latchToloerance)+.1),boxLengthYMm+latchSupportRadius+rimWidthMm,-latchScrewOffsetMm])
-                        rb_screw_hole_x(latchInsideWidthMm+(latchSupportWidth*2)+(latchToloerance*2)+.2, latchScrewSmallRadiusMm);
+                        rb_screw_hole_x(latchInsideWidthMm+(latchSupportWidth*2)+(latchToloerance*2)+.2, latchScrewSmallRadiusMm, roof_up = screwRoofUp);
                 }
             }       
         }
@@ -1068,32 +1108,21 @@ module BotomStandardHinge() {
             hingeX = (h*hingeSpacing)+((h-1)*hingeTotalWidthMm)+hingeOutsideWidth+hingeToleranceMm+actualHingeCenterOffsetMm;
             
             hingeKnuckleR = rb_knuckle_outer_radius(hingeRadiusMm, hingeScrewSmallRadiusMm);
-            hingeGussetSpan = (hingeKnuckleR * 2) + rimWidthMm;
-            hingeGussetHeight = hingeKnuckleR + rimWidthMm + openingTolerance;
+            hingeAxisY = boxLengthYMm + hingeRadiusMm + openingTolerance;
+            hingeAxisZ = openingTolerance / 2;
 
             difference () {
                 union() {
-                    translate([hingeX-(hingeOutsideWidth+hingeToleranceMm),boxLengthYMm+hingeRadiusMm+openingTolerance,openingTolerance/2])
+                    translate([hingeX-(hingeOutsideWidth+hingeToleranceMm), hingeAxisY, hingeAxisZ])
                         rb_knuckle_bar_x(hingeOutsideWidth, hingeKnuckleR);
-                    translate([hingeX+hingeInsideWidthMm+hingeToleranceMm,boxLengthYMm+hingeRadiusMm+openingTolerance,openingTolerance/2])
+                    translate([hingeX+hingeInsideWidthMm+hingeToleranceMm, hingeAxisY, hingeAxisZ])
                         rb_knuckle_bar_x(hingeOutsideWidth, hingeKnuckleR);
 
                     translate([hingeX-hingeToleranceMm,boxLengthYMm-(boxChamferRadiusMm+rimWidthMm),0]) rotate([90,0,-90]) linear_extrude(hingeOutsideWidth) Wall2D(boxWallWidthMm, supportRibThickness, boxBottomHeightZMm, false);
                     translate([hingeX+hingeInsideWidthMm+hingeToleranceMm+hingeOutsideWidth,boxLengthYMm-(boxChamferRadiusMm+rimWidthMm),0]) rotate([90,0,-90]) linear_extrude(hingeOutsideWidth) Wall2D(boxWallWidthMm, supportRibThickness, boxBottomHeightZMm, false);
 
-                    adjustment = sqrt((hingeKnuckleR^2)/2);
-                    hingeConnectorHeight = sqrt(hingeKnuckleR^2+hingeKnuckleR^2) + (hingeKnuckleR-adjustment);
-                    connector_drop = hingeKnuckleR * 6;
-                    translate([0, adjustment, -(hingeKnuckleR-adjustment)-(2*adjustment)])
-                        translate([hingeX-(hingeOutsideWidth+hingeToleranceMm),(boxLengthYMm+openingTolerance+hingeRadiusMm),hingeRadiusMm+(openingTolerance/2)])
-                            rotate([60,0,0])
-                                translate([0,-connector_drop,0])
-                                    cube([hingeOutsideWidth, connector_drop, hingeConnectorHeight]);
-                    translate([0, adjustment, -(hingeKnuckleR-adjustment)-(2*adjustment)])
-                        translate([hingeX+hingeInsideWidthMm+hingeToleranceMm,(boxLengthYMm+openingTolerance+hingeRadiusMm),hingeRadiusMm+(openingTolerance/2)])
-                            rotate([60,0,0])
-                                translate([0,-connector_drop,0])
-                                    cube([hingeOutsideWidth, connector_drop, hingeConnectorHeight]);
+                    rb_full_width_gusset(hingeX-(hingeOutsideWidth+hingeToleranceMm), hingeOutsideWidth, hingeAxisY, hingeAxisZ, boxLengthYMm - rimWidthMm, hingeKnuckleR, -1);
+                    rb_full_width_gusset(hingeX+hingeInsideWidthMm+hingeToleranceMm, hingeOutsideWidth, hingeAxisY, hingeAxisZ, boxLengthYMm - rimWidthMm, hingeKnuckleR, -1);
                 };
                 translate([hingeX-((hingeOutsideWidth+hingeToleranceMm)+.1),boxLengthYMm+hingeRadiusMm+openingTolerance,openingTolerance/2])
                     rb_screw_hole_x(hingeInsideWidthMm+(hingeOutsideWidth*2)+(hingeToleranceMm*2)+.2, hingeScrewSmallRadiusMm);
@@ -1122,24 +1151,18 @@ module TopStandardHinge() {
             hingeX = (h*hingeSpacing)+((h-1)*hingeTotalWidthMm)+hingeOutsideWidth+hingeToleranceMm+actualHingeCenterOffsetMm;
             
             hingeKnuckleR = rb_knuckle_outer_radius(hingeRadiusMm, hingeScrewLargeRadiusMm);
-            hingeGussetSpan = (hingeKnuckleR * 2) + rimWidthMm;
-            hingeGussetHeight = hingeKnuckleR + rimWidthMm + openingTolerance;
+            hingeAxisY = boxLengthYMm + hingeRadiusMm + openingTolerance;
+            hingeAxisZ = openingTolerance / 2;
 
             difference () {
                 union() {
-                    translate([hingeX,boxLengthYMm+hingeRadiusMm+openingTolerance,openingTolerance/2])
+                    translate([hingeX, hingeAxisY, hingeAxisZ])
                         rb_knuckle_bar_x(hingeInsideWidthMm, hingeKnuckleR, tip_down = false);
 
                     translate([0,boxLengthYMm-2,openingTolerance]) rotate([180,0,0]) translate([hingeX,boxChamferRadiusMm,0]) rotate([90,0,90]) linear_extrude(hingeInsideWidthMm) Wall2D(boxWallWidthMm, supportRibThickness, boxTopHeightZMm, false);
 
-                    adjustment = sqrt((hingeKnuckleR^2)/2);
-                    hingeConnectorHeight = sqrt(hingeKnuckleR^2+hingeKnuckleR^2) + (hingeKnuckleR-adjustment);
-                    connector_drop = hingeKnuckleR * 6;
-                    translate([0, adjustment, -(hingeKnuckleR-adjustment)])
-                        translate([hingeX,(boxLengthYMm+openingTolerance+hingeRadiusMm),hingeRadiusMm+(openingTolerance/2)])
-                            rotate([-60,0,0])
-                                translate([0,-connector_drop,-hingeConnectorHeight])
-                                    cube([hingeInsideWidthMm, connector_drop, hingeConnectorHeight]);
+                    // Print flip of the lid sends model +Z toward the bed.
+                    rb_full_width_gusset(hingeX, hingeInsideWidthMm, hingeAxisY, hingeAxisZ, boxLengthYMm - rimWidthMm, hingeKnuckleR, 1);
                 };
                 translate([hingeX-.1,boxLengthYMm+hingeRadiusMm+openingTolerance,openingTolerance/2])
                     rb_screw_hole_x(hingeInsideWidthMm + .2, hingeScrewLargeRadiusMm, roof_up = false);
