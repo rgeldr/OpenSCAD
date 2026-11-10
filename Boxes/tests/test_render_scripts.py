@@ -53,7 +53,10 @@ class RenderScriptFailureTest(unittest.TestCase):
             msg="ProcessStartInfo.ArgumentList is null on Windows PowerShell 5.1",
         )
         self.assertIn("Start-Process", text)
-        self.assertRegex(text, r"Script\s+stack trace:")
+        self.assertIn('ErrorActionPreference = "Continue"', text)
+        self.assertIn("Invoke-Native", text)
+        self.assertRegex(text, r"Failing line")
+        self.assertRegex(text, r"PSVersion\.Major -lt 6")
 
     def test_powershell_fails_on_error_and_warning(self) -> None:
         pwsh = shutil.which("pwsh")
@@ -85,7 +88,79 @@ class RenderScriptFailureTest(unittest.TestCase):
         # PS 7 wraps long Write-Error lines; PS 5.1 formats differ — require actionable detail.
         self.assertRegex(blob, r"(?is)script.{0,80}stack trace")
         self.assertRegex(blob, r"Invoke-OpenSCAD")
+        self.assertRegex(blob, r"Failing line \d+:")
         self.assertRegex(blob, r"(?is)render-presets\.ps1:\d+\s+char:\d+")
+
+    def test_native_stderr_does_not_hide_exit_code(self) -> None:
+        """stderr plus a non-zero exit must surface the exit code (PS 5.1 NativeCommandError)."""
+        pwsh = shutil.which("pwsh")
+        if not pwsh:
+            self.skipTest("pwsh is not installed")
+        probe = r"""
+$ErrorActionPreference = 'Stop'
+$env:RENDER_PRESETS_LIBRARY = '1'
+. ./Boxes/tests/render-presets.ps1
+$ok = Invoke-Native '/bin/sh' @('-c', 'echo progress-on-stderr 1>&2; echo stdout-line; exit 0')
+if ($ok.Code -ne 0) { throw "exit 0 with stderr became $($ok.Code)" }
+$joined = $ok.Lines -join "`n"
+if ($joined -notmatch 'progress-on-stderr') { throw "stderr was dropped: $joined" }
+if ($joined -notmatch 'stdout-line') { throw "stdout was dropped: $joined" }
+$bad = Invoke-Native '/bin/sh' @('-c', 'echo checker-failed 1>&2; exit 4')
+if ($bad.Code -ne 4) { throw "expected exit 4, got $($bad.Code)" }
+$quoted = ConvertTo-CommandLine @('a', 'b c', 'd"e')
+if ($quoted -ne 'a "b c" "d\"e"') { throw "quoting failed: $quoted" }
+Write-Output 'native-ok'
+"""
+        proc = subprocess.run(
+            [pwsh, "-NoProfile", "-Command", probe],
+            cwd=self.repo,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        blob = (proc.stdout or "") + "\n" + (proc.stderr or "")
+        self.assertEqual(proc.returncode, 0, msg=blob)
+        self.assertIn("native-ok", blob)
+
+    def test_script_parses_without_ps7_only_syntax(self) -> None:
+        pwsh = shutil.which("pwsh")
+        if not pwsh:
+            self.skipTest("pwsh is not installed")
+        probe = r"""
+$tokens = $null
+$errs = $null
+$path = (Resolve-Path './Boxes/tests/render-presets.ps1').Path
+$ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errs)
+if ($errs -and $errs.Count -gt 0) {
+    $errs | ForEach-Object { Write-Output $_.ToString() }
+    exit 1
+}
+foreach ($tok in $tokens) {
+    if ($tok.Text -in @('&&', '||', '??', '?.')) {
+        Write-Output ("forbidden token " + $tok.Text)
+        exit 2
+    }
+}
+$bad = $ast.FindAll({
+    param($node)
+    $node.GetType().Name -match 'Ternary|NullCoalescing|PipelineChain'
+}, $true)
+if ($bad) {
+    $bad | ForEach-Object { Write-Output $_.GetType().Name }
+    exit 3
+}
+Write-Output 'parse-ok'
+"""
+        proc = subprocess.run(
+            [pwsh, "-NoProfile", "-Command", probe],
+            cwd=self.repo,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        blob = (proc.stdout or "") + "\n" + (proc.stderr or "")
+        self.assertEqual(proc.returncode, 0, msg=blob)
+        self.assertIn("parse-ok", blob)
 
 
 if __name__ == "__main__":
