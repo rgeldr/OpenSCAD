@@ -3,13 +3,17 @@ import os
 import subprocess
 import unittest
 
+from boxes_test_support import openscad_exe
 from openscad_log import has_failures
 
 
 class CgalExportsTest(unittest.TestCase):
     def setUp(self) -> None:
         self.repo = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        self.scad = os.environ.get("OPENSCAD", "openscad")
+        found = openscad_exe()
+        if not found:
+            self.skipTest("OpenSCAD executable not found (set OPENSCAD or install openscad)")
+        self.scad = found
         self.product = os.path.join(self.repo, "Boxes", "RuggedBoxCustomeDividersV1.0.scad")
         self.off = [
             "-D", "generateGasket=false",

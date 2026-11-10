@@ -4,6 +4,7 @@ import os
 import subprocess
 import unittest
 
+from boxes_test_support import openscad_exe
 from check_overhangs import check_triangles, load_triangles, mesh_signed_volume, strip_csg_coplanar_pairs
 from openscad_log import has_failures
 
@@ -11,7 +12,10 @@ from openscad_log import has_failures
 class ManifoldProbeTest(unittest.TestCase):
     def setUp(self) -> None:
         self.repo = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        self.scad = os.environ.get("OPENSCAD", "openscad")
+        found = openscad_exe()
+        if not found:
+            self.skipTest("OpenSCAD executable not found (set OPENSCAD or install openscad)")
+        self.scad = found
         self.probe = os.path.join(self.repo, "Boxes", "tests", "manifold-probe.scad")
         self.out = os.path.join(self.repo, "out")
         os.makedirs(self.out, exist_ok=True)
