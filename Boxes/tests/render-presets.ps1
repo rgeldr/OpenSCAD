@@ -1,5 +1,8 @@
 # Windows PowerShell 5.1 and PowerShell 7. No ternary, &&, or .NET Core-only APIs.
 $ErrorActionPreference = "Stop"
+if ($PSVersionTable.PSVersion.Major -ge 7) {
+    $PSStyle.OutputRendering = "PlainText"
+}
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Set-Location $repo
 New-Item -ItemType Directory -Force -Path (Join-Path $repo "out") | Out-Null
@@ -86,14 +89,25 @@ function Invoke-OpenSCAD {
     $stdoutFile = Join-Path $outDir ("_openscad-out-{0}.log" -f [guid]::NewGuid().ToString())
     $stderrFile = Join-Path $outDir ("_openscad-err-{0}.log" -f [guid]::NewGuid().ToString())
     try {
+        # Redirects force UseShellExecute off. CreateProcess cannot run a .cmd/.bat
+        # (Windows reports "%1 is not a valid Win32 application"), so those fakes
+        # go through cmd.exe. openscad.com is already a Win32 executable.
+        $launchFile = $scad
+        $launchArgs = $argList
+        if ($scad -match '(?i)\.(cmd|bat)$') {
+            $comspec = $env:ComSpec
+            if ([string]::IsNullOrEmpty($comspec)) { $comspec = "cmd.exe" }
+            $launchFile = $comspec
+            $launchArgs = @("/d", "/c") + @($scad) + $argList
+        }
         # Windows PowerShell 5.1 joins an argument array without quoting. PowerShell 7
         # passes the array through. A single prebuilt command line is one argument on PS 7.
         if ($PSVersionTable.PSVersion.Major -lt 6) {
-            $startArgs = ConvertTo-CommandLine $argList
+            $startArgs = ConvertTo-CommandLine $launchArgs
         } else {
-            $startArgs = $argList
+            $startArgs = $launchArgs
         }
-        $proc = Start-Process -FilePath $scad -WorkingDirectory $repo `
+        $proc = Start-Process -FilePath $launchFile -WorkingDirectory $repo `
             -ArgumentList $startArgs -PassThru -Wait -NoNewWindow `
             -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile
         $stdout = ""

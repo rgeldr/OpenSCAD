@@ -7,7 +7,10 @@ import re
 import shutil
 from typing import Dict, Optional
 
-ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
+# CSI / OSC / short escapes. PowerShell 7 error views use more than SGR "m".
+ANSI_ESCAPE = re.compile(
+    r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\].*?(?:\x07|\x1b\\))"
+)
 
 
 def strip_ansi(text: str) -> str:
@@ -16,15 +19,46 @@ def strip_ansi(text: str) -> str:
     return ANSI_ESCAPE.sub("", text)
 
 
+def ps_output_variants(text: str) -> list[str]:
+    """Forms that still match after ANSI color and console line wrapping."""
+    cleaned = strip_ansi(text or "").replace("\r\n", "\n").replace("\r", "\n")
+    collapsed = re.sub(r"\s+", " ", cleaned)
+    unwrapped = cleaned.replace("\n", "")
+    return [cleaned, collapsed, unwrapped]
+
+
+def ps_output_matches(text: str, pattern: str) -> bool:
+    flags = re.IGNORECASE | re.DOTALL
+    return any(re.search(pattern, variant, flags) for variant in ps_output_variants(text))
+
+
+def is_wsl_system_bash(path: str) -> bool:
+    lowered = path.replace("/", "\\").lower()
+    return lowered.endswith("\\windows\\system32\\bash.exe") or lowered.endswith(
+        "\\windows\\sysnative\\bash.exe"
+    ) or lowered.endswith("\\windows\\syswow64\\bash.exe")
+
+
 def bash_for_render_tests() -> Optional[str]:
-    bash = shutil.which("bash")
-    if not bash:
-        return None
-    if os.name == "nt":
-        norm = os.path.normcase(os.path.normpath(bash))
-        if norm.endswith(os.path.normcase(r"\windows\system32\bash.exe")):
-            return None
-    return bash
+    """First bash on PATH that is not the WSL System32 shim. None if absent."""
+    path_env = os.environ.get("PATH", "")
+    names = ("bash", "bash.exe") if os.name == "nt" else ("bash",)
+    seen = set()
+    for directory in path_env.split(os.pathsep):
+        if not directory:
+            continue
+        for name in names:
+            candidate = os.path.join(directory, name)
+            key = os.path.normcase(candidate)
+            if key in seen:
+                continue
+            seen.add(key)
+            if not os.path.isfile(candidate):
+                continue
+            if is_wsl_system_bash(candidate):
+                continue
+            return candidate
+    return None
 
 
 def fake_openscad_sh(repo: str) -> str:
@@ -46,10 +80,20 @@ def env_for_render_sh_tests(repo: str, fail_line: str) -> Dict[str, str]:
     return env
 
 
+def powershell_exes() -> list[str]:
+    """PowerShell 7 (pwsh) and, on Windows, Windows PowerShell 5.1 (powershell)."""
+    names = ("pwsh", "powershell") if os.name == "nt" else ("pwsh",)
+    found: list[str] = []
+    for name in names:
+        path = shutil.which(name)
+        if path and path not in found:
+            found.append(path)
+    return found
+
+
 def powershell_exe() -> Optional[str]:
-    if os.name == "nt":
-        return shutil.which("pwsh") or shutil.which("powershell")
-    return shutil.which("pwsh")
+    exes = powershell_exes()
+    return exes[0] if exes else None
 
 
 def openscad_exe() -> Optional[str]:

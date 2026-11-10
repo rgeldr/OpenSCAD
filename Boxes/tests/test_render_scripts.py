@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """The preset renderers must fail when OpenSCAD prints ERROR or WARNING."""
 import os
+import re
 import subprocess
 import unittest
 
@@ -9,8 +10,8 @@ from boxes_test_support import (
     env_for_render_ps_tests,
     env_for_render_sh_tests,
     fake_openscad_path,
-    powershell_exe,
-    strip_ansi,
+    powershell_exes,
+    ps_output_matches,
 )
 
 
@@ -30,9 +31,12 @@ class RenderScriptFailureTest(unittest.TestCase):
             text=True,
             timeout=60,
         )
-        blob = strip_ansi((proc.stdout or "") + "\n" + (proc.stderr or ""))
+        blob = (proc.stdout or "") + "\n" + (proc.stderr or "")
         self.assertNotEqual(proc.returncode, 0, msg=blob)
-        self.assertIn(line.split(":", 1)[0] + ":", blob)
+        self.assertTrue(
+            ps_output_matches(blob, re.escape(line.split(":", 1)[0] + ":")),
+            msg=blob,
+        )
 
     def _assert_fails_sh(self, cmd: list, line: str) -> None:
         proc = subprocess.run(
@@ -53,11 +57,11 @@ class RenderScriptFailureTest(unittest.TestCase):
             self.skipTest("bash is not available (or only WSL System32 bash on Windows)")
         return bash
 
-    def _require_powershell(self) -> str:
-        ps = powershell_exe()
-        if not ps:
+    def _powershell_hosts(self) -> list[str]:
+        hosts = powershell_exes()
+        if not hosts:
             self.skipTest("PowerShell is not installed")
-        return ps
+        return hosts
 
     def test_bash_fails_on_error(self) -> None:
         bash = self._require_bash()
@@ -86,6 +90,18 @@ class RenderScriptFailureTest(unittest.TestCase):
         self.assertIn("Invoke-Native", text)
         self.assertRegex(text, r"Failing line")
         self.assertRegex(text, r"PSVersion\.Major -lt 6")
+        self.assertRegex(text, r"OutputRendering")
+        self.assertRegex(text, r"\(\?i\)\\\.\(cmd\|bat\)\$")
+        self.assertIn("ComSpec", text)
+
+    def test_fake_openscad_cmd_is_crlf_and_does_not_expand_bang(self) -> None:
+        cmd = os.path.join(self.repo, "Boxes", "tests", "fake-openscad-error.cmd")
+        with open(cmd, "rb") as fh:
+            raw = fh.read()
+        self.assertIn(b"\r\n", raw)
+        self.assertNotIn(b"\n", raw.replace(b"\r\n", b""))
+        self.assertIn(b"DisableDelayedExpansion", raw)
+        self.assertIn(b"echo(%FAIL_LINE%", raw)
 
     def test_fake_openscad_windows_cmd_emits_both_streams(self) -> None:
         if os.name != "nt":
@@ -117,36 +133,44 @@ class RenderScriptFailureTest(unittest.TestCase):
                     os.remove(path)
 
     def test_powershell_fails_on_error_and_warning(self) -> None:
-        ps = self._require_powershell()
-        self._assert_fails_ps(
-            [ps, "-NoProfile", "-File", "Boxes/tests/render-presets.ps1"],
-            "ERROR: The given mesh is not closed! Unable to convert to CGAL_Nef_Polyhedron.",
-        )
-        self._assert_fails_ps(
-            [ps, "-NoProfile", "-File", "Boxes/tests/render-presets.ps1"],
-            "WARNING: ignoring this would hide a bad mesh",
-        )
+        for ps in self._powershell_hosts():
+            with self.subTest(ps=ps):
+                self._assert_fails_ps(
+                    [ps, "-NoProfile", "-File", "Boxes/tests/render-presets.ps1"],
+                    "ERROR: The given mesh is not closed! Unable to convert to CGAL_Nef_Polyhedron.",
+                )
+                self._assert_fails_ps(
+                    [ps, "-NoProfile", "-File", "Boxes/tests/render-presets.ps1"],
+                    "WARNING: ignoring this would hide a bad mesh",
+                )
 
     def test_powershell_failure_includes_stack_trace(self) -> None:
-        ps = self._require_powershell()
-        proc = subprocess.run(
-            [ps, "-NoProfile", "-File", "Boxes/tests/render-presets.ps1"],
-            cwd=self.repo,
-            env=env_for_render_ps_tests(self.repo, "ERROR: simulated failure for stack trace test"),
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        blob = strip_ansi((proc.stdout or "") + "\n" + (proc.stderr or ""))
-        self.assertNotEqual(proc.returncode, 0)
-        self.assertRegex(blob, r"(?is)script.{0,120}stack trace")
-        self.assertRegex(blob, r"Invoke-OpenSCAD")
-        self.assertRegex(blob, r"Failing line \d+:")
-        self.assertRegex(blob, r"(?is)render-presets\.ps1:\d+\s+char:\d+")
+        for ps in self._powershell_hosts():
+            with self.subTest(ps=ps):
+                proc = subprocess.run(
+                    [ps, "-NoProfile", "-File", "Boxes/tests/render-presets.ps1"],
+                    cwd=self.repo,
+                    env=env_for_render_ps_tests(
+                        self.repo, "ERROR: simulated failure for stack trace test"
+                    ),
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+                blob = (proc.stdout or "") + "\n" + (proc.stderr or "")
+                self.assertNotEqual(proc.returncode, 0, msg=blob)
+                self.assertTrue(ps_output_matches(blob, r"script\s+stack\s+trace"), msg=blob)
+                self.assertTrue(ps_output_matches(blob, r"Invoke-OpenSCAD"), msg=blob)
+                self.assertTrue(ps_output_matches(blob, r"Failing line \d+:"), msg=blob)
+                self.assertTrue(
+                    ps_output_matches(blob, r"render-presets\.ps1:\d+\s*char:\d+"),
+                    msg=blob,
+                )
 
     def test_native_stderr_does_not_hide_exit_code(self) -> None:
         """stderr plus a non-zero exit must surface the exit code (PS 5.1 NativeCommandError)."""
-        ps = self._require_powershell()
+        hosts = self._powershell_hosts()
+        ps = hosts[0]
         probe = r"""
 $ErrorActionPreference = 'Stop'
 if ($PSVersionTable.PSVersion.Major -ge 7) { $PSStyle.OutputRendering = 'PlainText' }
@@ -175,12 +199,13 @@ Write-Output 'native-ok'
             text=True,
             timeout=60,
         )
-        blob = strip_ansi((proc.stdout or "") + "\n" + (proc.stderr or ""))
+        blob = (proc.stdout or "") + "\n" + (proc.stderr or "")
         self.assertEqual(proc.returncode, 0, msg=blob)
-        self.assertIn("native-ok", blob)
+        self.assertTrue(ps_output_matches(blob, r"native-ok"), msg=blob)
 
     def test_script_parses_without_ps7_only_syntax(self) -> None:
-        ps = self._require_powershell()
+        hosts = self._powershell_hosts()
+        ps = hosts[0]
         probe = r"""
 if ($PSVersionTable.PSVersion.Major -ge 7) { $PSStyle.OutputRendering = 'PlainText' }
 $tokens = $null
@@ -214,9 +239,9 @@ Write-Output 'parse-ok'
             text=True,
             timeout=60,
         )
-        blob = strip_ansi((proc.stdout or "") + "\n" + (proc.stderr or ""))
+        blob = (proc.stdout or "") + "\n" + (proc.stderr or "")
         self.assertEqual(proc.returncode, 0, msg=blob)
-        self.assertIn("parse-ok", blob)
+        self.assertTrue(ps_output_matches(blob, r"parse-ok"), msg=blob)
 
 
 if __name__ == "__main__":
