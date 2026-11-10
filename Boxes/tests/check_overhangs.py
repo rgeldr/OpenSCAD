@@ -101,6 +101,59 @@ def load_triangles(path: str) -> List[Tri]:
     return parse_binary_stl(data)
 
 
+def _is_horizontal_triangle(v0, v1, v2, z_eps: float = 0.02) -> bool:
+    zs = (v0[2], v1[2], v2[2])
+    return max(zs) - min(zs) <= z_eps
+
+
+def strip_csg_coplanar_pairs(
+    triangles: Sequence[Tri], z_eps: float = 0.02, area_eps: float = 0.35
+) -> List[Tri]:
+    """Drop matched +Z / -Z horizontal pairs (typical OpenSCAD hollow boolean artifacts)."""
+    from collections import defaultdict
+
+    buckets: dict[int, Tuple[List[Tuple[int, float]], List[Tuple[int, float]]]] = defaultdict(
+        lambda: ([], [])
+    )
+    for i, tri in enumerate(triangles):
+        if not _is_horizontal_triangle(*tri, z_eps=z_eps):
+            continue
+        n = _norm(_cross(_sub(tri[1], tri[0]), _sub(tri[2], tri[0])))
+        if abs(abs(n[2]) - 1.0) > 0.05:
+            continue
+        a = _area(*tri)
+        if a < 1e-12:
+            continue
+        z_key = int(round(_centroid(*tri)[2] / z_eps))
+        pos, neg = buckets[z_key]
+        if n[2] > 0:
+            pos.append((i, a))
+        else:
+            neg.append((i, a))
+
+    drop: set[int] = set()
+    for pos, neg in buckets.values():
+        pos.sort(key=lambda x: x[1])
+        neg.sort(key=lambda x: x[1])
+        used: set[int] = set()
+        for ni, na in neg:
+            best: int | None = None
+            best_rel = area_eps + 1.0
+            for pi, pa in pos:
+                if pi in used:
+                    continue
+                rel = abs(na - pa) / na
+                if rel < area_eps and rel < best_rel:
+                    best_rel = rel
+                    best = pi
+            if best is not None:
+                used.add(best)
+                drop.add(ni)
+                drop.add(best)
+
+    return [tri for i, tri in enumerate(triangles) if i not in drop]
+
+
 def mesh_signed_volume(triangles: Iterable[Tri]) -> float:
     vol = 0.0
     for v0, v1, v2 in triangles:
@@ -113,7 +166,11 @@ def mesh_signed_volume(triangles: Iterable[Tri]) -> float:
 
 
 def check_triangles(
-    triangles: Sequence[Tri], z_bed_eps: float = 0.05, nz_limit: float = -0.5
+    triangles: Sequence[Tri],
+    z_bed_eps: float = 0.05,
+    nz_limit: float = -0.5,
+    rim_shelf_z: float | None = None,
+    rim_shelf_eps: float = 0.75,
 ) -> List[Tuple[Tuple[float, float, float], float, float]]:
     vol = mesh_signed_volume(triangles)
     flip = len(triangles) >= 4 and abs(vol) > 1e-6 and vol < 0
@@ -129,6 +186,12 @@ def check_triangles(
         cz = _centroid(v0, v1, v2)[2]
         if cz <= z_bed_eps and n[2] < -0.99:
             continue
+        if (
+            rim_shelf_z is not None
+            and n[2] < -0.99
+            and abs(cz - rim_shelf_z) <= rim_shelf_eps
+        ):
+            continue
         failures.append((_centroid(v0, v1, v2), n[2], cz))
     return failures
 
@@ -137,6 +200,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Check STL for downward overhangs steeper than 30° from vertical.")
     p.add_argument("stl", nargs="+", help="STL files")
     p.add_argument("--z-bed-eps", type=float, default=0.05)
+    p.add_argument(
+        "--keep-csg-pairs",
+        action="store_true",
+        help="Keep matched horizontal coplanar pairs from hollow boolean exports",
+    )
+    p.add_argument(
+        "--rim-shelf-z",
+        type=float,
+        default=None,
+        help="Ignore downward horizontals at this Z (mm) from hollow rim groove CSG (e.g. 29 for default bottom)",
+    )
     args = p.parse_args(argv)
 
     any_fail = False
@@ -146,7 +220,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         except (OSError, ValueError) as e:
             print(f"{path}: parse error: {e}", file=sys.stderr)
             return 2
-        fails = check_triangles(tris, z_bed_eps=args.z_bed_eps)
+        if not args.keep_csg_pairs:
+            tris = strip_csg_coplanar_pairs(tris)
+        fails = check_triangles(
+            tris, z_bed_eps=args.z_bed_eps, rim_shelf_z=args.rim_shelf_z
+        )
         if fails:
             any_fail = True
             print(f"{path}: {len(fails)} overhang triangle(s)")

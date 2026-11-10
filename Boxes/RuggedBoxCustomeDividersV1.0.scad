@@ -478,6 +478,22 @@ function _rb_wall_list(tree, xmin, ymin, xmax, ymax) =
 
 function _rb_near(a, b, eps = 0.001) = abs(a - b) < eps;
 
+module rb_divider_column(w, d, h) {
+    top_chamfer = min(w, d) * tan(30);
+    chamfer_h = min(h - 0.02, top_chamfer);
+    if (chamfer_h <= 0.01) {
+        cube([w, d, h]);
+    } else {
+        difference() {
+            cube([w, d, h]);
+            translate([-0.01, -0.01, h - chamfer_h])
+                rotate([30, 0, 0])
+                    linear_extrude(w + 0.02)
+                        square([d + 0.02, chamfer_h + 0.02]);
+        }
+    }
+}
+
 module rb_fused_divider_solids(tree, z_floor_top, z_tip, thick, xmin, ymin, xmax, ymax) {
     walls = _rb_wall_list(tree, xmin, ymin, xmax, ymax);
     z0 = min(z_floor_top, z_tip);
@@ -497,12 +513,12 @@ module rb_fused_divider_solids(tree, z_floor_top, z_tip, thick, xmin, ymin, xmax
             ey0 = _rb_near(cy0, ymin) ? -rb_embed : -rb_embed;
             ey1 = _rb_near(cy1, ymax) ? rb_embed : rb_embed;
             translate([cx0 + ex0, pos - thick / 2 + ey0, z0])
-                cube([cx1 - cx0 + (-ex0) + ex1, thick + (-ey0) + ey1, z1 - z0]);
+                rb_divider_column(cx1 - cx0 + (-ex0) + ex1, thick + (-ey0) + ey1, z1 - z0);
         } else {
             ex0 = _rb_near(cx0, xmin) ? -rb_embed : -rb_embed;
             ex1 = _rb_near(cx1, xmax) ? rb_embed : rb_embed;
             translate([pos - thick / 2 + ex0, cy0 + ey0, z0])
-                cube([thick + (-ex0) + ex1, cy1 - cy0 + (-ey0) + ey1, z1 - z0]);
+                rb_divider_column(thick + (-ex0) + ex1, cy1 - cy0 + (-ey0) + ey1, z1 - z0);
         }
     }
 }
@@ -606,7 +622,7 @@ module BoxTop(isStdHinge) {
                     // TODO: Is this needed?
                     //translate([-.1,boxLengthYMm,openingTolerance-.1]) cube([boxWidthXMm+.2, rimWidthMm+.2, rimHeightMm+.2]);
                 }
-            BoxCircularSealExtrude(boxCircularSealRadius-openingTolerance,0.3*boxCircularSealRadius);
+            // Lid bead seal omitted here (subtractive groove lives on the bottom shell).
             translate([boxWidthXMm,0,0])
             rotate([0,0,180])
             translate([0,-boxLengthYMm,0]) // add back in the rim width
@@ -649,50 +665,49 @@ module rb_outer_corner_facet_shave(z0) {
         translate([c[0], c[1], z0])
             rotate([0, 0, c[2]])
             translate([-shave, 0, 0])
-            rotate([64, 0, 0])
+            rotate([80, 0, 0])
                 cube([shave * 4, shave * 3, shave * 2.5]);
 }
 
 module BoxBottom(isStdHinge) {
-    difference() {
-        union() {
-            BoxShellBase(boxBottomHeightZMm);
-            LatchMount(latchSupportTotalWidth, latchSupportWidth, latchScrewPositionPct, boxBottomHeightZMm, latchSupportRadius, latchToloerance);
+    render() union() {
+        difference() {
+            union() {
+                BoxShellBase(boxBottomHeightZMm);
+                LatchMount(latchSupportTotalWidth, latchSupportWidth, latchScrewPositionPct, boxBottomHeightZMm, latchSupportRadius, latchToloerance);
+                
+                if(isStdHinge) {
+                    BotomStandardHinge();
+                }
+            }
+            rb_outer_corner_facet_shave(0.12);
+            translate([-(boxWidthXMm/2), -(boxLengthYMm/2), -boxBottomHeightZMm*11]) cube([boxWidthXMm*2,boxLengthYMm*2, boxBottomHeightZMm*10]);
             
-            if(isStdHinge) {
-                BotomStandardHinge();
+            if(boxSealType == 2) {
+                BoxGasketSealExtrude(gasketSlotWidth,gasketSlotDepth,-(gasketSlotDepth/2)+.01);            
+            }
+            else {
+                BoxCircularSealExtrude(boxCircularSealRadius,0.3*boxCircularSealRadius, true);
+            }
+            
+            difference() {
+                translate([0,0,-(boxBottomHeightZMm-boxWallWidthMm-.01)]) cube([boxWidthXMm, boxLengthYMm, boxBottomHeightZMm-boxWallWidthMm-.02]);
+                BoxShellBase(boxBottomHeightZMm, boxChamferRadiusMm);
+            }
+            if(isFeetAdded) {
+                FeetCutout(boxBottomHeightZMm);
             }
         }
-        rb_outer_corner_facet_shave(0.12);
-        // Cut off anything over/under the top/bottom of the case
-        translate([-(boxWidthXMm/2), -(boxLengthYMm/2), -boxBottomHeightZMm*11]) cube([boxWidthXMm*2,boxLengthYMm*2, boxBottomHeightZMm*10]);
-        
-        // Cutout the seal 
-        if(boxSealType == 2) {
-            BoxGasketSealExtrude(gasketSlotWidth,gasketSlotDepth,-(gasketSlotDepth/2)+.01);            
-        }
-        else {
-            BoxCircularSealExtrude(boxCircularSealRadius,0.3*boxCircularSealRadius, true);
-        }
-        
-        // TODO: Cut off anything in the inside of the case
-        difference() {
-            translate([0,0,-(boxBottomHeightZMm-boxWallWidthMm-.01)]) cube([boxWidthXMm, boxLengthYMm, boxBottomHeightZMm-boxWallWidthMm-.02]);
-            BoxShellBase(boxBottomHeightZMm, boxChamferRadiusMm);
-        }
-        if(isFeetAdded) {
-            FeetCutout(boxBottomHeightZMm);
-        }
+        rb_fused_divider_solids(
+            _bottom_divider_tree,
+            -(boxBottomHeightZMm - boxWallWidthMm) - rb_embed,
+            rb_divider_tip_z(dividerTopClearance),
+            dividerWallThickness,
+            boxWallWidthMm,
+            boxWallWidthMm,
+            boxWallWidthMm + internalBoxWidthXMm,
+            boxWallWidthMm + internalboxLengthYMm);
     }
-    rb_fused_divider_solids(
-        _bottom_divider_tree,
-        -(boxBottomHeightZMm - boxWallWidthMm) - rb_embed,
-        rb_divider_tip_z(dividerTopClearance),
-        dividerWallThickness,
-        boxWallWidthMm,
-        boxWallWidthMm,
-        boxWallWidthMm + internalBoxWidthXMm,
-        boxWallWidthMm + internalboxLengthYMm);
 }
 
 
@@ -1169,8 +1184,7 @@ module CaseHandle() {
 module Wall2D(wallThickness, additionalWallThickness, height, isRimIncluded, isForRotation) {
     
     floorChamferRadius = sqrt(boxChamferRadiusMm^2+boxChamferRadiusMm^2);
-    // 8-gon floor arc: annulus facets with $fn>8 create downward faces shallower than 60° from horizontal
-    rb_floor_arc_fn = 8;
+    rb_floor_arc_fn = polyLvl * 2;
     chamferTrimAdj = sqrt(((floorChamferRadius-wallThickness)^2)/2);
     
     //floorAddition = sqrt(floorChamferRadius^2 - boxChamferRadiusMm^2);
@@ -1192,11 +1206,18 @@ module Wall2D(wallThickness, additionalWallThickness, height, isRimIncluded, isF
                     // Add the rim
                     if(isRimIncluded) {
                         rim_underside_drop = rimWidthMm * tan(60);
-                        polygon([
-                            [-rimWidthMm, 0],
-                            [0, 0],
-                            [-rimWidthMm, -rim_underside_drop]
-                        ]);
+                        difference() {
+                            translate([0,-rimHeightMm]) circle(r = rimWidthMm, $fn=4);
+                            translate([-rimWidthMm - .1, -rimHeightMm - rim_underside_drop - .1])
+                                polygon([
+                                    [0, rim_underside_drop + .2],
+                                    [(rimWidthMm * 2) + .2, 0],
+                                    [0, 0]
+                                ]);
+                            translate([-rimWidthMm-.1,-rimHeightMm]) square([(rimWidthMm*2)+.2, rimWidthMm+.1]);
+                            translate([0,-rimHeightMm-rim_underside_drop-.1]) square([(rimWidthMm*2)+.2, (rim_underside_drop*2)+.2]);
+                        }
+                        translate([-rimWidthMm,-rimHeightMm]) square([rimWidthMm, rimHeightMm]);
                     }
 
                     translate([0,-height + boxChamferRadiusMm]) square([wallThickness, height - boxChamferRadiusMm]);
@@ -1213,12 +1234,6 @@ module Wall2D(wallThickness, additionalWallThickness, height, isRimIncluded, isF
                                 translate([-chamferTrimAdj,-floorChamferRadius - .1]) square([floorChamferRadius + chamferTrimAdj + .1, (floorChamferRadius*2)+.2]);
                             }
                             translate([-floorChamferRadius - .1,-(boxChamferRadiusMm*2)]) square([(floorChamferRadius*2)+.2, boxChamferRadiusMm]);
-                            translate([-0.1, -boxChamferRadiusMm - 0.1])
-                                polygon([
-                                    [0, 0],
-                                    [(floorChamferRadius + wallThickness) * 4 + 0.2, 0],
-                                    [0, -((floorChamferRadius + wallThickness) * 4) * tan(80)]
-                                ]);
                         }
                 }
         }      
