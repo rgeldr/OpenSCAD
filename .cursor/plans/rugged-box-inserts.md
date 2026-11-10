@@ -20,6 +20,24 @@ Status: plan only, not started
 - Implementation starts only when Jason says run/build.
 - Commands must run in Windows PowerShell 5.1 (Windows 11 default) and in bash. PowerShell 5.1 has no `&&`.
 
+### Hard rule — 3D printer friendly (Jason, PR #1)
+
+Every part this plan **produces** must print **without support** in its intended orientation:
+
+- **Downward-facing** triangle normals (air above the face, solid below when printed) may not be shallower than **60° from the build plate** — equivalently, the angle between the face and **vertical (+Z)** must be **≤ 30°**.
+- **Upward-facing** surfaces and the **build-plate contact** (`z ≈ 0`) are unrestricted.
+- No horizontal ceilings/bridges, no lips or chamfers on **undersides**, no fillet geometry copied from the cavity profile onto sloped tray faces.
+
+**Intended print orientation (all tray outputs):**
+
+| Part | Orientation on the bed |
+|------|-------------------------|
+| **Bottom drop-in tray** (`dividerTarget = "bottom"`) | Tray **floor outer face** on `z = 0`. Walls and dividers grow **+Z**. Compartments open upward. |
+| **Lid drop-in tray** (Phase 3, `dividerTarget = "lid"`) | **Same** — floor on the plate, walls up. The tray is a separate print; Jason drops it into the lid cavity after printing. Do **not** flip the mesh to match the installed lid pose. |
+| **Walls-only** (`dividerFloorThickness = 0`) | Bottom of each divider wall segment on `z = 0` (no floor slab). |
+
+Design geometry so compliance is **obvious from construction** (vertical `linear_extrude` only). Do not rely on the checker to excuse modeled overhangs.
+
 ---
 
 ## 1. What V1.3 actually is
@@ -122,8 +140,10 @@ Copied modules keep reading `boxChamferRadiusMm`, `boxWallWidthMm`, `rimWidthMm`
 | `Boxes/lib/rugged-box-divider-lib.scad` | Layout functions, the copied cavity pieces, tray module. No top-level geometry. |
 | `Boxes/RuggedBoxV1.4-Inserts.scad` | Customizer, presets, calls the tray. |
 | `Boxes/tests/rugged-box-divider-lib-test.scad` | Calls every helper and `assert`s. Echoes one success line. No mesh. |
-| `Boxes/tests/render-presets.ps1` | Windows PowerShell 5.1 render. |
-| `Boxes/tests/render-presets.sh` | bash render. |
+| `Boxes/tests/render-presets.ps1` | Windows PowerShell 5.1 render + overhang check. |
+| `Boxes/tests/render-presets.sh` | bash render + overhang check. |
+| `Boxes/tests/check_overhangs.py` | STL overhang audit (stdlib only). |
+| `Boxes/tests/test_check_overhangs.py` | Synthetic-STL unit tests for the checker. |
 
 No `RuggedBoxV1.4-Inserts.json`. A sibling JSON is loaded by the GUI and, with `-p`/`-P`, overrides `-D`. Presets live in the `.scad` file so CLI `-D dividerLayoutPreset=N` is the value that renders.
 
@@ -240,18 +260,51 @@ wall_h = tray_h - dividerFloorThickness
 
 `rb_wall_z(30, 1.2, 1)` with bottom clearance 0 returns `30 - 1 - 1.2 = 27.8`. The earlier formula used `interior - clearances` as the wall height and then added the floor, so the tray was `dividerFloorThickness` too tall and crossed the parting plane.
 
-Print orientation: tray floor on `z = 0`. That is the box floor top, not V1.3's module origin (V1.3's floor top is at `z = -(height - boxWallWidthMm)` before the print translate).
+OpenSCAD module origin uses V1.3's cavity `z` (floor top near `z = -(height - boxWallWidthMm)`). Before export, **`translate([0, 0, +tray_h])`** (or equivalent) moves the tray so the **bed contact is at `z = 0`**. All overhang checks assume that export transform.
 
-Lid target: same formula with `internalBoxTopHeightZMm`, after `rb_mirror_y`.
+Lid target: same formula with `internalBoxTopHeightZMm`, after `rb_mirror_y`. Same bed orientation and same export translate.
 
 ---
 
-## 6. Printability
+## 6. Printability (30° rule audit)
 
-- Walls and the floor edge are vertical. The fillet is cleared by using the floor-level plan, not by copying the fillet's slope onto the tray.
+### 6.1 Construction rules (implementation)
+
+- **Floor:** one `linear_extrude(dividerFloorThickness)` of the tray floor polygon (intersection of cavity plan with compartment layout). Top face is +Z (up); bottom is bed — **compliant**.
+- **Dividers:** one `linear_extrude(wall_h)` per wall rectangle, axis **Z** only. No `rotate_extrude`, no `hull()` that adds sloped faces, no `minkowski()` with a sphere.
+- **Clip:** floor plan from `projection(cut=true)`; **vertical** extrusion only. The V1.3 `Wall2D` fillet is used to **define the void** for that projection, not swept onto the tray solid (see §1.3). **Compliant.**
+- **Forbidden on tray solids:** underside chamfers, draft angles &lt; 60° from horizontal, radius rounds on the **bottom** edge, pockets with horizontal roofs, bridge spans between dividers, lightening grids.
+- If a **top edge** feature is ever needed (e.g. a pull tab), chamfer the **outer top** only (up-facing mold); never the underside.
+
+### 6.2 Feature-by-feature compliance
+
+| Feature | Complies? | Notes |
+|---------|-----------|--------|
+| Tray floor (solid) | Yes | Plate at `z=0`; thickness extruded +Z. |
+| Divider walls (vertical) | Yes | Side normals horizontal (`n_z = 0`), not downward. |
+| Divider wall **tops** | Yes | Horizontal face normal **+Z** (upward), not a downward ceiling. |
+| Divider–divider T joints | Yes | 90° vertical intersections only; no fillet wedges on undersides. |
+| Divider–perimeter (cavity clip) | Yes | Walls truncated by vertical floor outline; no sloped cavity fillet on tray. |
+| Floor outline corners (plan) | Yes | Vertical extrusion → vertical exterior corners; no 45° bottom chamfer. |
+| `dividerFloorThickness = 0` (walls-only) | Yes | Walls rest on bed; no bridging between wall bases. |
+| Uniform grid / nested tree layouts | Yes | Topology only; does not add slopes. |
+| Lid tray (Phase 3) | Yes | Same mesh rules; `rb_mirror_y` is layout-only, then same Z-up export. |
+| Finger scoops (out of scope) | N/A | Would violate (concave undercuts); remain excluded. |
+| STLBuddy “remove section” / `["open"]` (future) | **Redesign required** | Removing a cell floor exposes the **underside** of neighboring floors (downward horizontal). Future spec: either no open cells, or **per-cell floors** with vertical walls (no shared horizontal shelf), or printable only with support (reject in checker). |
+| Integrated / fused V1.3 bottom (out of scope) | N/A | Not produced by this plan. |
+
+### 6.3 V1.3 geometry (unchanged — information only)
+
+This plan does **not** change `RuggedBoxV1.3.scad`. Jason may print the box as today. Overhangs in V1.3 are **not** fixed here; noted for context:
+
+- **`Wall2D` floor fillet** (lines 1071–1080): inner corner is a circular fillet; when dividers use **`BoxInsert`** chamfer booleans (lines 944–945), end cuts match wall profile — relevant to **built-in** V1.3 dividers, not the drop-in tray.
+- **`BoxShellBase` / hinge / latch / handle**: many slopes and overhangs; standard rugged-box print orientation is outside this insert project.
+- **`CreateBoxInserts`**: blank TPU inserts use the same cavity shell; printing them is separate from the divider tray.
+
+### 6.4 Other FDM defaults
+
 - Default wall 1.2 mm (three 0.4 mm perimeters). `rb_validate` rejects thickness &lt; 1.0 mm.
 - A split closer than the wall thickness to a cell edge is a validation error.
-- Floor is solid. No lightening pattern.
 - Side clearance default 0.1 mm. Note in the header that FDM may want 0.2–0.4 mm.
 
 ---
@@ -260,15 +313,17 @@ Lid target: same formula with `internalBoxTopHeightZMm`, after `rb_mirror_y`.
 
 Pass/fail is the process exit code plus `--hardwarnings`. Do not grep the log for `ERROR`: a no-match `grep` returns 1, so the old snippet failed the run when OpenSCAD succeeded. `-q` is omitted so the `.echo` export still contains the success line.
 
-**Do not** `-o /dev/null` or `-o NUL`. The export format is the file extension. Neither path has one. A Windows `/dev/null` also used to create `C:\dev\null`. Assert-only runs export `.echo` ([manual](https://en.wikibooks.org/wiki/OpenSCAD_User_Manual/Using_OpenSCAD_in_a_command_line_environment)). An empty STL is an error ("top level object is empty"), so preset 0 still emits the tray floor.
+**Do not** `-o /dev/null` or `-o NUL`. Assert-only runs export `.echo` ([manual](https://en.wikibooks.org/wiki/OpenSCAD_User_Manual/Using_OpenSCAD_in_a_command_line_environment)). On Windows call `openscad.com`, not `openscad.exe`. PNG preview may need `xvfb-run -a` on headless Linux. `--imgsize` takes `width,height` as one argument.
 
-On Windows call `openscad.com`, not `openscad.exe`. The `.exe` is a GUI subsystem binary and drops stdout. Override with `$env:OPENSCAD` / `$OPENSCAD` when it is not on `PATH`.
+### 7.0 Per-part checklist (manual, before merge)
 
-`--hardwarnings` makes the STL export return non-zero on 2021.01. The same flag's non-zero exit for `.echo` and `.png` is the April 2021 fix (after the 2021.01 tag). Prefer a current build (2025.x, the manual's current help text). The scripts treat any non-zero exit as failure.
+For each exported STL (`preset-0` … `preset-3`, lid preset when present):
 
-`-D generateGasketTestObjects=false` does not belong on the new file. That variable is V1.3's. `-D` only overrides an assignment that exists in the main file; `dividerLayoutPreset` is assigned in the entry file.
-
-PNG is preview (F5) by default and needs OpenGL. Linux headless uses `xvfb-run -a`. Camera is `--autocenter --viewall`, not a guessed `--camera`. `--imgsize` takes `width,height` as one argument.
+- [ ] Printed orientation documented: floor / wall bases on bed, +Z up.
+- [ ] No `rotate`/`hull`/`minkowski` used for tray/d divider solids (code review).
+- [ ] No underside chamfer or lip in the SCAD for that export.
+- [ ] `python3 Boxes/tests/check_overhangs.py <file.stl>` exits 0.
+- [ ] Slicer preview (optional): no support generated with default settings.
 
 ### 7.1 Bash (`Boxes/tests/render-presets.sh`)
 
@@ -283,10 +338,14 @@ SCAD="${OPENSCAD:-openscad}"
   Boxes/tests/rugged-box-divider-lib-test.scad
 grep -q "divider-lib-tests ok" out/divider-lib-test.echo
 
+PYTHON="${PYTHON:-python3}"
+"$PYTHON" -m unittest discover -s Boxes/tests -p 'test_check_overhangs.py'
+
 for p in 0 1 2 3; do
   "$SCAD" --hardwarnings -o "out/preset-$p.stl" \
     -D dividerLayoutPreset="$p" \
     Boxes/RuggedBoxV1.4-Inserts.scad
+  "$PYTHON" Boxes/tests/check_overhangs.py "out/preset-$p.stl"
 done
 
 # xvfb-run execs a program. It does not see a shell function, so the
@@ -327,12 +386,18 @@ Invoke-OpenSCAD @(
 $echo = Get-Content "out\divider-lib-test.echo" -Raw
 if ($echo -notmatch "divider-lib-tests ok") { throw "assert run did not report success" }
 
+$py = if (Get-Command python -ErrorAction SilentlyContinue) { "python" } else { "py" }
+& $py -m unittest discover -s Boxes/tests -p 'test_check_overhangs.py'
+if ($LASTEXITCODE -ne 0) { throw "check_overhangs unit tests failed" }
+
 foreach ($p in 0, 1, 2, 3) {
     Invoke-OpenSCAD @(
         "--hardwarnings", "-o", "out\preset-$p.stl",
         "-D", "dividerLayoutPreset=$p",
         "Boxes\RuggedBoxV1.4-Inserts.scad"
     )
+    & $py Boxes\tests\check_overhangs.py "out\preset-$p.stl"
+    if ($LASTEXITCODE -ne 0) { throw "overhang check failed for preset $p" }
 }
 Invoke-OpenSCAD @(
     "--hardwarnings", "--autocenter", "--viewall", "--imgsize", "800,600",
@@ -346,6 +411,41 @@ The test file ends with `echo("divider-lib-tests ok");` after the asserts. A fai
 
 PNG on a Windows box with a desktop session does not need Xvfb. Attach `out/nested_demo.png` and name the STL paths in the implementation PR.
 
+### 7.3 Overhang checker (automated)
+
+**Math (unit outward normal `n`, bed at `z = 0`, build direction +Z):**
+
+- A triangle **violates** the 30°-from-vertical rule if it is **downward-facing** and too shallow:
+  - **`n_z < -sin(30°) = -0.5`** (more than 30° from vertical toward the bed).
+- **Excluded:** triangles whose three vertices all have **`z ≤ z_bed_eps`** (default `z_bed_eps = 0.05` mm) — build-plate contact.
+- Upward faces (`n_z ≥ 0`) never violate.
+
+Report each violation: triangle index, `n`, centroid, `max_z`.
+
+**CLI:**
+
+```text
+python3 Boxes/tests/check_overhangs.py [--z-bed-eps 0.05] [--min-angle-deg 30] file.stl ...
+```
+
+Exit **0** if none; **1** if any; **2** on parse error. Python **3.8+**, stdlib only (ASCII/binary STL).
+
+**Unit tests** (`Boxes/tests/test_check_overhangs.py`, `unittest`):
+
+| Case | Expect |
+|------|--------|
+| Synthetic box 10×10×5 mm on bed | pass |
+| Box + triangle normal `(0,0,-1)` at `z = 2` | fail |
+| Normal `(0,0,-1)` at `z = 0.01` | pass (bed band) |
+| `n_z = -0.4` at `z = 2` | pass (≤ 30° from vertical) |
+| `n_z = -0.6` at `z = 2` | fail |
+
+From repo root: `python3 -m unittest discover -s Boxes/tests -p 'test_check_overhangs.py'` (Windows: `python` / `py -3`).
+
+**Integration:** §7.1 and §7.2 run this checker on every exported STL after Phase 2.
+
+**Horizontal holes (future):** teardrop or diamond profile; add golden STL to unit tests. None in Phases 1–3.
+
 ---
 
 ## 8. Phases
@@ -353,25 +453,27 @@ PNG on a Windows box with a desktop session does not need Xvfb. Attach `out/nest
 ### Phase 0 — this plan
 
 - [x] Review against `RuggedBoxV1.3.scad` and correct the cavity, the tree, and the CLI commands.
+- [x] Add Jason's 30°-from-vertical overhang rule, audit, and verification plan.
 - **Done when:** Jason says to build. No `.scad` in this phase.
 
-### Phase 1 — functions
+### Phase 1 — functions + overhang checker
 
 - [ ] Add the library functions in §3.3. No mesh, no copied `Wall2D` yet.
-- [ ] Add the test file. Every function in the table has its assert.
-- **Done when:** both scripts' `.echo` step exits 0 (the STL loop can wait until phase 2; until then the scripts' STL loop is commented, or phase 1 runs only the echo command).
+- [ ] Add the OpenSCAD test file. Every function in the table has its assert.
+- [ ] Add `check_overhangs.py` and `test_check_overhangs.py` (synthetic STLs only).
+- **Done when:** `.echo` step exits 0; `unittest discover … test_check_overhangs.py` exits 0 on Windows and Linux. STL/overhang-on-export waits for Phase 2.
 
 ### Phase 2 — bottom tray
 
-- [ ] Copy `Wall2D`, rib-free `BoxShellBase`, and the cavity difference. Extrude the tray from the floor-level `projection(cut=true)`.
-- [ ] Entry file, presets 0–3, screenshot size 100 × 80.
-- [ ] Uncomment the STL/PNG steps.
-- **Done when:** four STLs exit 0 under `--hardwarnings`, preset 0 is a floor with no walls, and `out/nested_demo.png` shows one cross-divider plus a column in each band.
+- [ ] Copy `Wall2D`, rib-free `BoxShellBase`, and the cavity difference. Extrude the tray from the floor-level `projection(cut=true)`; **translate so bed is `z = 0`**.
+- [ ] Entry file, presets 0–3, screenshot size 100 × 80. Geometry per §6.1 only.
+- [ ] Wire full render scripts (STL, PNG, overhang check per preset).
+- **Done when:** four STLs exit 0 under `--hardwarnings`; **`check_overhangs.py` exits 0 on each**; preset 0 is floor-only; `out/nested_demo.png` shows one cross-divider plus a column in each band; §7.0 checklist signed off.
 
-### Phase 3 — lid
+### Phase 3 — lid tray
 
-- [ ] `dividerTarget = "lid"` uses lid height and `rb_mirror_y`.
-- **Done when:** one lid STL exits 0 and the Y-mirror assert still passes.
+- [ ] `dividerTarget = "lid"` uses lid height and `rb_mirror_y`. Same Z-up bed orientation as bottom tray.
+- **Done when:** lid STL exits 0 under `--hardwarnings`; **`check_overhangs.py` exits 0**; Y-mirror assert passes; §7.0 checklist for lid STL.
 
 ---
 
@@ -382,7 +484,7 @@ PNG on a Windows box with a desktop session does not need Xvfb. Attach `out/nest
 | Tray vs. dividers fused into the V1.3 shell? | **Tray.** Fusing means editing V1.3 or copying `BoxBottom`. Out of this build. |
 | Where does the nested layout get edited? | **Preset dropdown, plus one millimeter string** for preset 3. Nested lists stay off the Customizer. |
 | Fractions in the string? | **No.** Millimeters, matching the 73.92 mm slider. Presets recompute mm from the cavity size. |
-| STLBuddy "remove section"? | **Not in this build.** A later leaf `["open"]` can drop that cell's floor without changing splits. |
+| STLBuddy "remove section"? | **Not in this build.** A future `["open"]` leaf must not leave a shared horizontal shelf under neighbors (would fail the 30° rule); use per-cell floors or reject in the checker. |
 | Finger scoops? | **Not in this build.** |
 | Lid tray? | **Phase 3**, Y-mirror only, default target stays the bottom. |
 | Should V1.3 later call this library? | **Separate decision.** Not part of building the tray. |
