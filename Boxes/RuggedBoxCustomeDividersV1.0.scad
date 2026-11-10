@@ -523,7 +523,7 @@ function rb_validate(node, w, l, wall_thick, clearance, clearance_bottom, cleara
 function _rb_teardrop_down_points(r, n_arc) =
     let(jx = r * sqrt(3) / 2)
     let(jy = r / 2)
-    let(angles = [for (a = [n_arc : n_arc : 180 - n_arc]) a])
+    let(angles = [for (a = [30 + n_arc : n_arc : 150 - n_arc]) a])
     concat(
         [[0, -r]],
         [[jx, jy]],
@@ -535,15 +535,20 @@ module rb_printable_teardrop_2d(r) {
     polygon(_rb_teardrop_down_points(r, 3));
 }
 
-module rb_printable_teardrop_hole_2d(r) {
-    mirror([0, 1, 0])
+module rb_printable_teardrop_hole_2d(r, roof_up = true) {
+    // roof_up: tip toward +Z after the caller's rotate([0,90,0]).
+    // The lid print pose flips Z, so its hinge hole passes roof_up=false.
+    rotate([0, 0, roof_up ? -90 : 90])
         polygon(_rb_teardrop_down_points(r, 6));
 }
 
-module rb_teardrop_cylinder_x(length, r) {
-  rotate([0, 90, 0])
-    linear_extrude(height = length, center = true)
-      rb_printable_teardrop_2d(r);
+module rb_teardrop_cylinder_x(length, r, tip_down = true) {
+    // Caller applies rotate([0,90,0]), same placement as cylinder().
+    // tip_down puts the point on world -Z. The lid hinge is flipped again
+    // by the print layout, so it passes tip_down=false.
+    linear_extrude(height = length)
+        rotate([0, 0, tip_down ? 90 : -90])
+            rb_printable_teardrop_2d(r);
 }
 
 module rb_vertical_rib_profile_2d(w, h) {
@@ -1049,7 +1054,7 @@ module TopStandardHinge() {
                 union() {
                     // Main hinge cylinder
                     translate([hingeX,boxLengthYMm+hingeRadiusMm+openingTolerance,openingTolerance/2]) rotate([0,90,0])
-                        rb_teardrop_cylinder_x(hingeInsideWidthMm, hingeRadiusMm);
+                        rb_teardrop_cylinder_x(hingeInsideWidthMm, hingeRadiusMm, tip_down = false);
                       
                     // support ribs
                     translate([0,boxLengthYMm-2,openingTolerance]) rotate([180,0,0]) translate([hingeX,boxChamferRadiusMm,0]) rotate([90,0,90]) linear_extrude(hingeInsideWidthMm) Wall2D(boxWallWidthMm, supportRibThickness, boxTopHeightZMm, false);
@@ -1071,83 +1076,10 @@ module TopStandardHinge() {
                 };
                 // Cut the screw hole out
                 translate([hingeX-.1,boxLengthYMm+hingeRadiusMm+openingTolerance,openingTolerance/2]) rotate([0,90,0])
-                    linear_extrude(hingeInsideWidthMm + .2) rb_printable_teardrop_hole_2d(hingeScrewLargeRadiusMm);
+                    linear_extrude(hingeInsideWidthMm + .2) rb_printable_teardrop_hole_2d(hingeScrewLargeRadiusMm, roof_up = false);
         }
     }
 }
-
-module BoxLengthXSeparators(separatorWidth, height, isSkipFromEnd, isReversed = false) {
-    numRows = len(columnsPerRow);
-    rowLengthY = (boxLengthYMm - (2 * boxWallWidthMm)) / numRows;
-
-    for (rowIndex = [0 : numRows - 1]) {
-        
-        // If isReversed is true, read the array backwards so the lid perfectly mirrors the base!
-        actualRowIndex = isReversed ? (numRows - 1 - rowIndex) : rowIndex;
-        cols = columnsPerRow[actualRowIndex];
-        
-        if (cols > 1) {
-            colWidth = (boxWidthXMm - (2 * boxWallWidthMm)) / cols;
-            
-            for (colIndex = [1 : cols - 1]) {
-                xOffset = boxWallWidthMm + (colIndex * colWidth) - (separatorWidth / 2);
-                yOffset = boxWallWidthMm + (rowIndex * rowLengthY);
-
-                translate([xOffset, yOffset, -(height - boxWallWidthMm)]) {
-                    difference() {
-                        // Create the divider segment just for this specific row
-                        cube([separatorWidth, rowLengthY, height - boxWallWidthMm]);
-
-                        // Match the front wall chamfer cutout for the first physical row
-                        if (rowIndex == 0) {
-                            translate([-0.1, (boxChamferRadiusMm - boxWallWidthMm), height - boxWallWidthMm]) 
-                                rotate([90, 0, 90]) 
-                                    linear_extrude(separatorWidth + 0.2) 
-                                        Wall2D(boxWallWidthMm, boxChamferRadiusMm, height, false, false);
-                        }
-                        
-                        // Match the back wall chamfer cutout for the last physical row
-                        if (rowIndex == numRows - 1) {
-                            translate([separatorWidth + 0.1, rowLengthY, 0]) 
-                                rotate([0, 0, 180]) 
-                                    translate([0, (boxChamferRadiusMm - boxWallWidthMm), height - boxWallWidthMm]) 
-                                        rotate([90, 0, 90]) 
-                                            linear_extrude(separatorWidth + 0.2) 
-                                                Wall2D(boxWallWidthMm, boxChamferRadiusMm, height, false, false);
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-module BoxWidthYSeparators(separatorWidth, height, isSkipFromEnd) {
-    
-    skipFromBegining = isSkipFromEnd ? 0 : numBoxLengthYSectionsToSkip;
-    skipFromEnd = isSkipFromEnd ? numBoxLengthYSectionsToSkip : 0;
-    
-    if(boxLengthYSections > 1) {
-        for (y =[1+skipFromBegining:(boxLengthYSections-1-skipFromEnd)]) {
-            translate([boxWallWidthMm,separatorWidth+(((boxLengthYMm-(2*boxWallWidthMm))/boxLengthYSections)*y)+(boxWallWidthMm-(separatorWidth/2)),-(height-boxWallWidthMm)])
-                rotate([0,0,-90])
-                    BoxInsert(boxWidthXMm, height, separatorWidth);
-        }
-    }
-    
-}
-
-
-module BoxInsert(width, height, separatorWidth) {
-//translate([boxWidthXMm/2, boxWallWidthMm, -(boxBottomHeightZMm-boxWallWidthMm)])
-    difference() {
-        cube([separatorWidth,width-(2*boxWallWidthMm), height-boxWallWidthMm]);
-        translate([-0.1,(boxChamferRadiusMm-boxWallWidthMm),height-boxWallWidthMm]) rotate([90,0,90]) linear_extrude(separatorWidth+0.2) Wall2D(boxWallWidthMm, boxChamferRadiusMm, height, false, false);
-        translate([separatorWidth+0.1,width-(2*boxWallWidthMm),0]) rotate([0,0,180]) translate([0,(boxChamferRadiusMm-boxWallWidthMm),height-boxWallWidthMm]) rotate([90,0,90]) linear_extrude(separatorWidth+0.2) Wall2D(boxWallWidthMm, boxChamferRadiusMm, height, false, false);
-    }
-}
-
-
 
 module BoxShellBase(height, additionalShellThickness = 0) {
     // Bottom
@@ -1226,8 +1158,10 @@ module CaseHandle() {
                             [0, latchSupportRadius * 2]
                         ]);
         }
-        translate([latch1_innerX - 0.1, 0, handlePrintHeight]) rotate([0, 90, 0]) cylinder(h = handleThickness + 0.2, r = latchScrewSmallRadiusMm + .05, $fn = 100);
-        translate([latchLast_innerX - handleThickness - 0.1, 0, handlePrintHeight]) rotate([0, 90, 0]) cylinder(h = handleThickness + 0.2, r = latchScrewSmallRadiusMm + .05, $fn = 100);
+        translate([latch1_innerX - 0.1, 0, handlePrintHeight]) rotate([0, 90, 0])
+            linear_extrude(handleThickness + 0.2) rb_printable_teardrop_hole_2d(latchScrewSmallRadiusMm + .05);
+        translate([latchLast_innerX - handleThickness - 0.1, 0, handlePrintHeight]) rotate([0, 90, 0])
+            linear_extrude(handleThickness + 0.2) rb_printable_teardrop_hole_2d(latchScrewSmallRadiusMm + .05);
     }
 }
 

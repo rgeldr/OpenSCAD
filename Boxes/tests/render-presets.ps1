@@ -53,3 +53,11 @@ Invoke-OpenSCAD @(
     "-D","generateGasket=false","-D","generateFeetIfSetInSettings=false",
     "Boxes\RuggedBoxCustomeDividersV1.0.scad")
 Invoke-Check "out\handle.stl"
+Invoke-OpenSCAD @(
+    "--hardwarnings","-o","out\closed-preset-2.stl",
+    "-D","viewBoxClosed=true","-D","dividerLayoutPreset=2",
+    "-D","generateLatches=false","-D","generateHandle=false",
+    "-D","generateGasket=false","-D","generateFeetIfSetInSettings=false",
+    "Boxes\RuggedBoxCustomeDividersV1.0.scad")
+& $py Boxes\tests\check_layout.py out\bottom-preset-0.stl out\bottom-preset-2.stl out\closed-preset-2.stl
+if ($LASTEXITCODE -ne 0) { throw "layout check failed" }

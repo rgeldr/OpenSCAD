@@ -70,6 +70,14 @@ class CheckOverhangsTests(unittest.TestCase):
         tris = [((0, 0, 2), (2, 0, 2 + math.sqrt(3)), (1, 2, 2))]
         self.assertEqual(len(check_triangles(tris)), 0)
 
+    def test_nz_just_under_limit_passes(self):
+        # Tessellated 60° faces can land a few ulps under -0.5.
+        nz = -0.5 - 1e-6
+        run = 2.0
+        rise = run * math.sqrt(max(0.0, 1.0 / (nz * nz) - 1.0))
+        tris = [((0, 0, 2), (0, run, 2), (run, 0, 2 - rise))]
+        self.assertEqual(len(check_triangles(tris)), 0)
+
     def test_nz_060_fails(self):
         tris = [((0, 0, 2), (2, 2, 2), (2, 0, 2.15))]
         self.assertEqual(len(check_triangles(tris)), 1)
@@ -77,6 +85,23 @@ class CheckOverhangsTests(unittest.TestCase):
     def test_upward_passes(self):
         tris = [((0, 0, 5), (1, 0, 5), (0.5, 1, 6))]
         self.assertEqual(len(check_triangles(tris)), 0)
+
+    def test_stored_normal_is_ignored(self):
+        # Binary STL stores a +Z normal on a face that actually points down.
+        data = _binary_stl([((0, 0, 2), (0, 1, 2), (1, 0, 2))])
+        import os
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".stl", delete=False) as f:
+            f.write(data)
+            path = f.name
+        try:
+            tris = load_triangles(path)
+            fails = check_triangles(tris)
+            self.assertEqual(len(fails), 1)
+            self.assertLess(fails[0][1], -0.9)
+        finally:
+            os.unlink(path)
 
     def test_load_binary_round_trip(self):
         import os

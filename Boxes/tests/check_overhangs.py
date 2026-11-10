@@ -124,7 +124,7 @@ def check_triangles(
         n = _norm(_cross(_sub(v1, v0), _sub(v2, v0)))
         if flip:
             n = (-n[0], -n[1], -n[2])
-        if n[2] >= nz_limit:
+        if n[2] >= nz_limit - 1e-4:
             continue
         cz = _centroid(v0, v1, v2)[2]
         if cz <= z_bed_eps and n[2] < -0.99:

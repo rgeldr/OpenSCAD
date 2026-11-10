@@ -40,6 +40,12 @@ done
   $OFF Boxes/RuggedBoxCustomeDividersV1.0.scad
 "$PYTHON" Boxes/tests/check_overhangs.py out/handle.stl
 
+"$SCAD" --hardwarnings -o out/closed-preset-2.stl \
+  -D viewBoxClosed=true -D dividerLayoutPreset=2 \
+  -D generateLatches=false -D generateHandle=false \
+  $OFF Boxes/RuggedBoxCustomeDividersV1.0.scad
+"$PYTHON" Boxes/tests/check_layout.py out/bottom-preset-0.stl out/bottom-preset-2.stl out/closed-preset-2.stl
+
 if command -v xvfb-run >/dev/null; then
   xvfb-run -a "$SCAD" --hardwarnings --autocenter --viewall --imgsize 800,600 \
     -D viewBoxClosed=true -D dividerLayoutPreset=2 \
