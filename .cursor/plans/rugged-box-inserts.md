@@ -189,7 +189,8 @@ node = "." | ("x" | "y") number "(" node "," node ")"
 | `rb_walls(node, xmin, ymin, xmax, ymax)` | screenshot tree → 3 walls; the Y wall spans the full width; each X wall spans only its band. |
 | `rb_mirror_y(node, ymin, ymax)` | mirrored twice equals the original; X unchanged; Y split positions map to `length - pos`. |
 | `rb_lid_tree(bottom_tree, length)` | equals `rb_mirror_y(bottom_tree, 0, length)`. |
-| `rb_divider_top_z(clearance)` | with clearance 0.5, the top is 0.5 below the parting plane. |
+| `rb_divider_tip_z(clearance)` | shell-frame tip is `-clearance` (0.5 → `-0.5`). Same formula for bottom and lid. |
+| `rb_closed_divider_gap(clearance, opening_tol)` | `2*clearance + opening_tol`. Defaults → `1.1`. |
 | `rb_inside_corner_trimmed(wall, chamfer)` | `false` for `(2, 1)`; `true` for `(2, 6)`. This is the line 1076 predicate. |
 
 `rb_validate` asserts each `pos_mm` leaves at least `dividerWallThickness` of parent on both sides, thickness ≥ 1.0, clearance > 0, and wall count ≤ 32.
@@ -218,14 +219,23 @@ Each wall is a vertical cube in bottom module space:
 
 Then `union()` with the shell. No `intersection()` with the cavity void.
 
-### 5.2 Lid (`BoxTop` cavity)
+### 5.2 Lid — same shell frame as V1.3's lid dividers
 
-Resolve the same preset/string tree as the bottom, then `rb_mirror_y` over `internalboxLengthYMm` (§3.2). Fuse with the **same** rules in lid module space:
+`BoxTop` (lines 390–429) does **not** build the lid in the same Z frame as `BoxBottom`. The shell and the existing dividers are both inside:
 
-- Embed **`rb_embed`** into the lid's inner ceiling (the surface that faces the parting plane when closed) and into side walls / sibling dividers.
-- The divider's free end (toward the opening when the lid sits on the bed) stops **`dividerTopClearance`** above the parting plane in lid space — the mirror of the bottom rule, so when the box is closed the two divider sets do not meet.
+```openscad
+rotate([180,0,0]) translate([0,-boxLengthYMm,-openingTolerance])
+```
 
-Walls are still built as vertical prisms in the cavity's XY (vertical in the print orientation after V1.3's lid placement transforms). No fillet-shaped end cut.
+Call that the **shell frame**. In it, `z = 0` is the opening and the inner ceiling is `z = -internalBoxTopHeightZMm`. V1.3's lid dividers are cubes in that frame from the ceiling up to `z = 0` (lines 424–428, `BoxLengthXSeparators` at lines 895–898).
+
+Build the new lid walls in that **same** wrapper, not in `BoxTop` coordinates after the rotate:
+
+- Tree is `rb_mirror_y` of the bottom tree across the **interior** length `internalboxLengthYMm` (positions measured from the inner corner `boxWallWidthMm`, not from the outside). Mirror once, here. The `rotate([180,0,0])` then maps shell Y to closed-box Y (`y → boxLengthYMm - y`), so a wall at interior position `pos` on the bottom meets the lid wall at `interior - pos`. Mirroring again after the rotate would undo that and the compartments would miss.
+- Z is the bottom rule, in this same frame: root buried `rb_embed` past the inner ceiling (`z = -internalBoxTopHeightZMm - rb_embed`), tip at `z = -dividerTopClearance`. Default lid interior is 15 mm (`internalBoxTopHeightZMm`, Customizer min 15), so a 0.5 mm tip clearance still leaves a wall.
+- `union` with the shell. The lid void cut uses `boxChamferRadiusMm*2` (line 421) only as the subtracted corner solid. Do not clip the divider to that solid.
+
+`rb_validate` also asserts `dividerTopClearance + rb_embed < internalBoxTopHeightZMm` and `< internalboxBottomHeightZMm`, and `rb_embed < boxWallWidthMm` so the root stays inside the skin.
 
 ### 5.3 Why not clip to the fillet
 
@@ -233,11 +243,21 @@ The fillet makes the void tighter at the floor than higher up. Cutting a divider
 
 ### 5.4 Closing clearance
 
-At the parting plane, bottom divider tops sit at **−0.5 mm** (bottom frame) and lid divider tips at **+0.5 mm** (lid frame). That is **1.0 mm** of air between divider plastic when closed, before counting flex. `openingTolerance` (0.1 mm) is the rim/shell gap between top and bottom halves; do not fold it into divider math.
+Both tips are `dividerTopClearance` short of **their own** shell opening (`z = 0` in that shell frame). That is the 0.5 mm Jason asked for on each half.
 
-### 5.5 Printability of fused dividers
+They are not 1.0 mm apart in the closed box. `BoxTop`'s shell is shifted by `-openingTolerance` before the 180° rotate (line 393), so the lid opening sits `openingTolerance` (default 0.1 mm) above the bottom opening. Closed gap between divider tips:
 
-Vertical side faces (`n_z = 0`) and upward tops on the bottom (`n_z = +1`) pass. On the lid STL, vertical sides still pass; the embedded "root" end is up in +Z (cavity ceiling), also compliant. No horizontal downward ceilings.
+```text
+rb_closed_divider_gap = 2*dividerTopClearance + openingTolerance
+```
+
+Defaults: `1.0 + 0.1 = 1.1` mm. The two sets cannot meet. Do not also subtract `openingTolerance` from the 0.5 mm.
+
+### 5.5 Print orientation of the lid dividers
+
+The print layout (lines 326–328) is `translate([0, …, boxTopHeightZMm]) translate([0, …, openingTolerance]) rotate([-180,0,0]) BoxTop()`. Combined with the shell's own 180° rotate, the **outer lid skin lands on `z = 0`** and the opening faces +Z.
+
+In that pose the buried root is the low end (inside the skin, near `z = boxWallWidthMm`) and the free tip is the high end (`z = boxTopHeightZMm - dividerTopClearance`). Side faces stay vertical (`n_z = 0`). The tip face points +Z. Nothing on the divider faces down. Same rule as the bottom.
 
 ---
 
@@ -259,7 +279,7 @@ V1.3 is unchanged on disk. These are edits inside the copied modules. Line numbe
 | Latch body (`linear_extrude` of `StandardLatch2D`, lines 635–637) | Prism in +Z. Screw holes are vertical. | Pass | Keep. |
 | Handle (`hull()` of horizontal cylinders down to a slab, `CaseHandle`) | Convex hull from the bed slab up to the cylinders. Tangents from the slab to the round can be shallower than 60°. | Not safe as copied | Keep the grip outline. Rebuild the sides so every downward face is at 60° or steeper. The checker on `handle.stl` is the gate. |
 | Feet (`Foot`, `isFeetAdded` default false) | Trapezoid prism, then `rotate([90,0,0])`, so the print axis is not the modeled axis. | Re-orient and check | Print with the flat base on `z = 0`. If a side is under 60°, steepen it to 60°. |
-| Fused dividers (bottom and lid) | Not in V1.3's tree form. `BoxInsert` end cuts use `Wall2D` slopes. | — | Vertical cubes, `rb_embed`, no fillet-shaped end cut (§5). Same on lid with Y-mirrored tree. |
+| Fused dividers (bottom and lid) | Not in V1.3's tree form. `BoxInsert` end cuts use `Wall2D` slopes. | Pass, once built as in §5 | Vertical cubes in the shell frame, `rb_embed`, tip at `z = -0.5`. Lid tree is Y-mirrored **before** `BoxTop`'s 180° rotate. Print pose puts the free tip at the high end. |
 | Finger scoops, open cells | Not built | — | Open cells leave horizontal undersides. Scoops are undercuts. Not in this build. |
 
 ---
@@ -485,8 +505,8 @@ From the repo root: `python3 -m unittest discover -s Boxes/tests -p 'test_check_
 ### Phase 3 — fused dividers (bottom and lid)
 
 - [ ] Bottom: §5.1. Lid: §5.2 with `rb_mirror_y` tree. Presets 0–3 on both.
-- [ ] Assert in tests: with clearance 0.5 on both halves, `2 * dividerTopClearance` is the divider-to-divider gap at the parting plane (1.0 mm).
-- **Done when:** all eight STL pairs pass; preset 2 shows the screenshot topology on bottom **and** mirrored on lid; `closed-preview.png` with `viewBoxClosed=true`; §7.0 checked off.
+- [ ] Assert `rb_divider_tip_z(0.5) == -0.5` and `rb_closed_divider_gap(0.5, 0.1) == 1.1`.
+- **Done when:** all eight STLs (`bottom-preset-0..3`, `lid-preset-0..3`) pass `--hardwarnings` and `check_overhangs.py`. Preset 2 on the lid is the Y-mirror of the bottom. `closed-preview.png` uses `viewBoxClosed=true`. §7.0 checked off.
 
 ---
 
@@ -513,6 +533,5 @@ From the repo root: `python3 -m unittest discover -s Boxes/tests -p 'test_check_
 
 | Question | Recommended default |
 |----------|---------------------|
-| Preset 2 screenshot on 160×60 default interior? | **Yes.** Fractions (0.40 × length, etc.) scale; proportions match STLBuddy, not literal 100×80 mm unless the user sets dimensions. |
-| `generateHandle` when `numberOfLatches < 2`? | Keep V1.3 behavior (no handle); CLI tests always pass `-D numberOfLatches=2` for `handle.stl`. |
-| Gasket/foot STLs in CI? | **Off** in render scripts; optional manual run if `boxSealType=2` or `isFeetAdded=true`. |
+| `generateHandle` when `numberOfLatches < 2`? | Keep V1.3's behavior (no handle). `handle.stl` is rendered with `-D numberOfLatches=2`. |
+| Gasket and feet in the render scripts? | **Off**, matching `boxSealType` 1 and `isFeetAdded` false. Turn them on by hand when those options are enabled. |
