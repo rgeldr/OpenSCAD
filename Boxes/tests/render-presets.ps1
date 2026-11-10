@@ -7,6 +7,7 @@ $py = if (Get-Command python -ErrorAction SilentlyContinue) { "python" } else { 
 $summary = New-Object System.Collections.Generic.List[string]
 
 function Test-OpenSCADLog([string]$Text) {
+    if ([string]::IsNullOrEmpty($Text)) { return }
     if ($Text -match "(?m)(\s|^)(ERROR|WARNING):") {
         $hits = [regex]::Matches($Text, "(?m)^.*(ERROR|WARNING):.*$") | ForEach-Object { $_.Value.Trim() }
         throw "OpenSCAD output contains ERROR/WARNING:`n$($hits -join "`n")"
@@ -20,30 +21,46 @@ function Invoke-OpenSCAD {
         [switch]$Quiet
     )
     $logPath = Join-Path $repo "out\openscad-last.log"
-    $argList = @("--hardwarnings") + $(if ($Quiet) { "-q" } else { }) + $ScadArgs
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = $scad
-    $psi.UseShellExecute = $false
-    $psi.CreateNoWindow = $true
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError = $true
-    foreach ($a in $argList) { [void]$psi.ArgumentList.Add($a) }
-    $proc = [System.Diagnostics.Process]::Start($psi)
-    $stdout = $proc.StandardOutput.ReadToEnd()
-    $stderr = $proc.StandardError.ReadToEnd()
-    $proc.WaitForExit()
-    $text = ($stdout + "`n" + $stderr).Trim()
-    Set-Content -Path $logPath -Value $text -Encoding utf8
-    if ($proc.ExitCode -ne 0) {
-        throw "OpenSCAD failed ($Label): exit $($proc.ExitCode)`n$text"
+    $argList = @("--hardwarnings")
+    if ($Quiet) { $argList += "-q" }
+    $argList += $ScadArgs
+
+    # Use Start-Process (works on Windows PowerShell 5.1). The PS7-only
+    # ProcessStartInfo string-collection API is null on .NET Framework.
+    $outDir = Join-Path $repo "out"
+    $stdoutFile = Join-Path $outDir ("_openscad-out-{0}.log" -f [guid]::NewGuid().ToString())
+    $stderrFile = Join-Path $outDir ("_openscad-err-{0}.log" -f [guid]::NewGuid().ToString())
+    try {
+        $proc = Start-Process -FilePath $scad -ArgumentList $argList -PassThru -Wait -NoNewWindow `
+            -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile
+        $stdout = ""
+        $stderr = ""
+        if (Test-Path -LiteralPath $stdoutFile) {
+            $stdout = Get-Content -LiteralPath $stdoutFile -Raw -ErrorAction SilentlyContinue
+        }
+        if (Test-Path -LiteralPath $stderrFile) {
+            $stderr = Get-Content -LiteralPath $stderrFile -Raw -ErrorAction SilentlyContinue
+        }
+        if ($null -eq $stdout) { $stdout = "" }
+        if ($null -eq $stderr) { $stderr = "" }
+        $text = ($stdout + "`n" + $stderr).Trim()
+        Set-Content -Path $logPath -Value $text -Encoding utf8
+        if ($proc.ExitCode -ne 0) {
+            throw "OpenSCAD failed ($Label): exit $($proc.ExitCode)`n$text"
+        }
+        Test-OpenSCADLog $text
     }
-    Test-OpenSCADLog $text
+    finally {
+        Remove-Item -LiteralPath $stdoutFile, $stderrFile -Force -ErrorAction SilentlyContinue
+    }
+
     $stl = $null
     for ($i = 0; $i -lt $ScadArgs.Count - 1; $i++) {
         if ($ScadArgs[$i] -eq "-o") { $stl = $ScadArgs[$i + 1] }
     }
     if ($stl -and $stl.ToLower().EndsWith(".stl")) {
         $tris = & $py -c "import sys; sys.path.insert(0,'Boxes/tests'); from check_overhangs import load_triangles; print(len(load_triangles(r'$stl')))"
+        if ($LASTEXITCODE -ne 0) { throw "triangle count failed for $stl" }
         [void]$summary.Add("OK $Label ($stl, $tris triangles)")
     } else {
         [void]$summary.Add("OK $Label")
@@ -65,7 +82,12 @@ try {
     Invoke-OpenSCAD "assert echo" @(
         "-o", "out\custom-dividers-test.echo",
         "Boxes\tests\rugged-box-custom-dividers-test.scad")
-    $echo = Get-Content "out\custom-dividers-test.echo" -Raw
+    $echoPath = Join-Path $repo "out\custom-dividers-test.echo"
+    $echo = ""
+    if (Test-Path -LiteralPath $echoPath) {
+        $echo = Get-Content -LiteralPath $echoPath -Raw -ErrorAction SilentlyContinue
+    }
+    if ($null -eq $echo) { $echo = "" }
     if ($echo -notmatch "custom-dividers-tests ok") { throw "assert run did not report success" }
 
     if (-not $env:RENDER_PRESETS_SKIP_UNITTEST) {
@@ -125,6 +147,17 @@ try {
     Write-Host "render-presets ok"
 }
 catch {
-    Write-Error "render-presets.ps1 stopped: $($_.Exception.Message)"
+    $err = $_
+    $msg = $err.Exception.Message
+    $pos = if ($err.InvocationInfo) { $err.InvocationInfo.PositionMessage } else { "" }
+    $stack = if ($err.ScriptStackTrace) { $err.ScriptStackTrace } else { $err.Exception.StackTrace }
+    $fqid = if ($err.FullyQualifiedErrorId) { $err.FullyQualifiedErrorId } else { "" }
+    Write-Error @"
+render-presets.ps1 stopped: $msg
+${pos}
+Script stack trace:
+${stack}
+${fqid}
+"@
     exit 1
 }
