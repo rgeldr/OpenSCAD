@@ -99,6 +99,7 @@ uniformGridCols = 2;     // [1:8]
 uniformGridRows = 2;     // [1:8]
 dividerWallThickness = 1.2;
 dividerTopClearance = 0.5;
+rb_embed = 0.2;
 dividerLayoutString = "y32(x62(.,.),x74(.,.))";
 
 
@@ -227,8 +228,7 @@ function rb_layout_tree() =
 _bottom_divider_tree = rb_layout_tree();
 _lid_divider_tree = rb_lid_tree(_bottom_divider_tree, boxWallWidthMm, boxWallWidthMm + internalboxLengthYMm);
 
-if (generateBoxBottom || generateBoxTop)
-    rb_validate(_bottom_divider_tree, internalBoxWidthXMm, internalboxLengthYMm, dividerWallThickness, dividerTopClearance, internalboxBottomHeightZMm, internalBoxTopHeightZMm, rb_embed, boxWallWidthMm);
+_rb_checked = assert(rb_validate(_bottom_divider_tree, internalBoxWidthXMm, internalboxLengthYMm, dividerWallThickness, dividerTopClearance, internalboxBottomHeightZMm, internalBoxTopHeightZMm, rb_embed, boxWallWidthMm));
 
 // WALL Testing
 //translate([0,-50,0]) rotate([90,0,0]) linear_extrude(6) Wall2D(boxWallWidthMm, 0, boxBottomHeightZMm, true, true);
@@ -317,8 +317,6 @@ if(generateGasket) {
 
 
 
-
-rb_embed = 0.2;
 
 function rb_divider_tip_z(clearance) = -clearance;
 function rb_closed_divider_gap(clearance, opening_tol) = 2 * clearance + opening_tol;
@@ -534,7 +532,7 @@ function _rb_teardrop_down_points(r, n_arc) =
     );
 
 module rb_printable_teardrop_2d(r) {
-    polygon(_rb_teardrop_down_points(r, 6));
+    polygon(_rb_teardrop_down_points(r, 3));
 }
 
 module rb_printable_teardrop_hole_2d(r) {
@@ -548,16 +546,40 @@ module rb_teardrop_cylinder_x(length, r) {
       rb_printable_teardrop_2d(r);
 }
 
-// 60° tongue/groove cross-section (polygon approximation of circle with printable slopes)
-function _rb_tongue_groove_points(r, fn) =
-    let(steps = max(12, fn))
-    let(jx = r * cos(30))
-    let(jy = r * sin(30))
-    let(arc = [for (i = [0 : steps - 1]) let(a = 30 + (120 / steps) * i) [r * cos(a), r * sin(a)]])
+module rb_vertical_rib_profile_2d(w, h) {
+    chamfer = min(h, w * tan(60));
+    polygon([[0, 0], [w, 0], [w, max(0, h - chamfer)], [0, h]]);
+}
+
+module rb_latch_connector_slab(w, h, thick) {
+    rotate([60, 0, 0])
+        linear_extrude(height = thick, center = true)
+            square([w, h / tan(60) + 0.01]);
+}
+
+// 60° tongue (additive bead) and groove (subtractive cut) cross-sections
+function _rb_bead_profile_points(r, fn) =
+    let(steps = max(24, fn))
+    let(jx = r * sqrt(3) / 2)
+    let(jy = r / 2)
+    let(arc = [for (i = [0 : steps - 1]) let(a = i * 180 / steps) [r * cos(a), r * sin(a)]])
     concat([[0, -r]], [[jx, jy]], arc, [[-jx, jy]]);
 
+function _rb_groove_profile_points(r) =
+    let(jx = r * sqrt(3) / 2)
+    let(jy = r / 2)
+    [[-jx, jy], [jx, jy], [0, -r]];
+
+module rb_bead_profile(r, $fn = 24) {
+    polygon(_rb_bead_profile_points(r, $fn));
+}
+
+module rb_groove_profile(r) {
+    polygon(_rb_groove_profile_points(r));
+}
+
 module rb_tongue_groove_circle(r, $fn = 24) {
-    polygon(_rb_tongue_groove_points(r, $fn));
+    rb_bead_profile(r, $fn = $fn);
 }
 
 
@@ -611,6 +633,21 @@ module BoxTop(isStdHinge) {
                 boxWallWidthMm + internalboxLengthYMm);
 }
 
+module rb_outer_corner_facet_shave(z0) {
+    shave = boxWallWidthMm * 1.5;
+    for (c = [
+        [boxChamferRadiusMm, boxChamferRadiusMm, -135],
+        [boxWidthXMm - boxChamferRadiusMm, boxChamferRadiusMm, -45],
+        [boxWidthXMm - boxChamferRadiusMm, boxLengthYMm - boxChamferRadiusMm, 45],
+        [boxChamferRadiusMm, boxLengthYMm - boxChamferRadiusMm, 135]
+    ])
+        translate([c[0], c[1], z0])
+            rotate([0, 0, c[2]])
+            translate([-shave, 0, 0])
+            rotate([64, 0, 0])
+                cube([shave * 4, shave * 3, shave * 2.5]);
+}
+
 module BoxBottom(isStdHinge) {
     difference() {
         union() {
@@ -621,6 +658,7 @@ module BoxBottom(isStdHinge) {
                 BotomStandardHinge();
             }
         }
+        rb_outer_corner_facet_shave(0.12);
         // Cut off anything over/under the top/bottom of the case
         translate([-(boxWidthXMm/2), -(boxLengthYMm/2), -boxBottomHeightZMm*11]) cube([boxWidthXMm*2,boxLengthYMm*2, boxBottomHeightZMm*10]);
         
@@ -629,7 +667,7 @@ module BoxBottom(isStdHinge) {
             BoxGasketSealExtrude(gasketSlotWidth,gasketSlotDepth,-(gasketSlotDepth/2)+.01);            
         }
         else {
-            BoxCircularSealExtrude(boxCircularSealRadius,0.3*boxCircularSealRadius);
+            BoxCircularSealExtrude(boxCircularSealRadius,0.3*boxCircularSealRadius, true);
         }
         
         // TODO: Cut off anything in the inside of the case
@@ -702,27 +740,34 @@ module Foot() {
 
 
 
-module BoxCircularSealExtrude(radius, zOffset) {
+module BoxCircularSealExtrude(radius, zOffset, is_subtractive = false) {
 
     pivotDistanceFromWall = max(boxChamferRadiusMm, boxWallWidthMm);
+    module _seal_profile() {
+        if (is_subtractive) {
+            rb_groove_profile(radius);
+        } else {
+            rb_bead_profile(radius, $fn = 64);
+        }
+    }
 
     translate([pivotDistanceFromWall,boxWallWidthMm-((boxWallWidthMm+rimWidthMm)/2),zOffset]) 
-        rotate([0,90,0]) linear_extrude(boxWidthXMm-(2*pivotDistanceFromWall)) rb_tongue_groove_circle(radius, $fn=64);
+        rotate([0,90,0]) linear_extrude(boxWidthXMm-(2*pivotDistanceFromWall)) _seal_profile();
     translate([pivotDistanceFromWall,boxLengthYMm-boxWallWidthMm+((boxWallWidthMm+rimWidthMm)/2),zOffset]) 
-        rotate([0,90,0]) linear_extrude(boxWidthXMm-(2*pivotDistanceFromWall)) rb_tongue_groove_circle(radius, $fn=64);
+        rotate([0,90,0]) linear_extrude(boxWidthXMm-(2*pivotDistanceFromWall)) _seal_profile();
     translate([boxWallWidthMm-((boxWallWidthMm+rimWidthMm)/2),pivotDistanceFromWall,zOffset]) 
-        rotate([-90,0,0]) linear_extrude(boxLengthYMm-(2*pivotDistanceFromWall)) rb_tongue_groove_circle(radius, $fn=64);
+        rotate([-90,0,0]) linear_extrude(boxLengthYMm-(2*pivotDistanceFromWall)) _seal_profile();
     translate([boxWidthXMm-boxWallWidthMm+((boxWallWidthMm+rimWidthMm)/2),pivotDistanceFromWall,zOffset]) 
-        rotate([-90,0,0]) linear_extrude(boxLengthYMm-(2*pivotDistanceFromWall)) rb_tongue_groove_circle(radius, $fn=64);
+        rotate([-90,0,0]) linear_extrude(boxLengthYMm-(2*pivotDistanceFromWall)) _seal_profile();
 
     translate([pivotDistanceFromWall,pivotDistanceFromWall,zOffset]) 
-        rotate([0,0,180]) rotate_extrude(angle = 90, $fn=polyLvl) translate([(pivotDistanceFromWall+(pivotDistanceFromWall-boxWallWidthMm)+rimWidthMm)/2,0]) rb_tongue_groove_circle(radius, $fn=64);
+        rotate([0,0,180]) rotate_extrude(angle = 90, $fn=polyLvl) translate([(pivotDistanceFromWall+(pivotDistanceFromWall-boxWallWidthMm)+rimWidthMm)/2,0]) _seal_profile();
     translate([pivotDistanceFromWall,boxLengthYMm-pivotDistanceFromWall,zOffset]) 
-        rotate([0,0,90]) rotate_extrude(angle = 90, $fn=polyLvl) translate([(pivotDistanceFromWall+(pivotDistanceFromWall-boxWallWidthMm)+rimWidthMm)/2,0]) rb_tongue_groove_circle(radius, $fn=64);
+        rotate([0,0,90]) rotate_extrude(angle = 90, $fn=polyLvl) translate([(pivotDistanceFromWall+(pivotDistanceFromWall-boxWallWidthMm)+rimWidthMm)/2,0]) _seal_profile();
     translate([pivotDistanceFromWall+boxWidthXMm-(2*pivotDistanceFromWall),boxLengthYMm-pivotDistanceFromWall,zOffset]) 
-        rotate([0,0,0]) rotate_extrude(angle = 90, $fn=polyLvl) translate([(pivotDistanceFromWall+(pivotDistanceFromWall-boxWallWidthMm)+rimWidthMm)/2,0]) rb_tongue_groove_circle(radius, $fn=64);
+        rotate([0,0,0]) rotate_extrude(angle = 90, $fn=polyLvl) translate([(pivotDistanceFromWall+(pivotDistanceFromWall-boxWallWidthMm)+rimWidthMm)/2,0]) _seal_profile();
     translate([pivotDistanceFromWall+boxWidthXMm-(2*pivotDistanceFromWall),pivotDistanceFromWall,zOffset]) 
-        rotate([0,0,270]) rotate_extrude(angle = 90, $fn=polyLvl) translate([(pivotDistanceFromWall+(pivotDistanceFromWall-boxWallWidthMm)+rimWidthMm)/2,0]) rb_tongue_groove_circle(radius, $fn=64);
+        rotate([0,0,270]) rotate_extrude(angle = 90, $fn=polyLvl) translate([(pivotDistanceFromWall+(pivotDistanceFromWall-boxWallWidthMm)+rimWidthMm)/2,0]) _seal_profile();
 
 }
 
@@ -881,33 +926,26 @@ module LatchMount(latchSupportTotalWidth, latchSupportWidth, latchScrewPositionP
                 
                 difference () {
                     union() {
-                        // Main latch cylinder
                         translate([latchMountX-(latchSupportWidth+latchToloerance), (boxLengthYMm+latchSupportRadius)+rimWidthMm, -latchScrewOffsetMm]) rotate([0,90,0])
                             rb_teardrop_cylinder_x(latchSupportWidth, latchSupportRadius);
                         translate([latchMountX+latchInsideWidthMm+latchToloerance,(boxLengthYMm+latchSupportRadius)+rimWidthMm,-latchScrewOffsetMm]) rotate([0,90,0])
                             rb_teardrop_cylinder_x(latchSupportWidth, latchSupportRadius);
                         
-                        // ribs
-                        translate([latchMountX-latchToloerance,boxLengthYMm+(latchSupportRadius*2)+rimWidthMm,-latchScrewOffsetMm]) rotate([90,0,-90]) linear_extrude(latchSupportWidth) square([(latchSupportRadius*2)+rimWidthMm, latchScrewOffsetMm]);
-                        translate([latchMountX+latchInsideWidthMm+latchToloerance+latchSupportWidth,boxLengthYMm+(latchSupportRadius*2)+rimWidthMm,-latchScrewOffsetMm]) rotate([90,0,-90]) linear_extrude(latchSupportWidth) square([(latchSupportRadius*2)+rimWidthMm, latchScrewOffsetMm]);
-                        
                         translate([latchMountX-latchToloerance,boxLengthYMm-(boxChamferRadiusMm),0]) rotate([90,0,-90]) linear_extrude(latchSupportWidth) Wall2D(boxWallWidthMm, (rimWidthMm*2), caseSectionHeight, false);
                         translate([latchMountX+latchInsideWidthMm+latchToloerance+latchSupportWidth,boxLengthYMm-(boxChamferRadiusMm),0]) rotate([90,0,-90]) linear_extrude(latchSupportWidth) Wall2D(boxWallWidthMm, (rimWidthMm*2), caseSectionHeight, false);
                         
-                        // Attach the hinge to the top
                         adjustment = sqrt((latchSupportRadius^2)/2);
                         hingeConnectorHeight = sqrt(latchSupportRadius^2+latchSupportRadius^2) + (latchSupportRadius-adjustment);    
-                        
                         difference() {
                             union() {
                                 translate([0, adjustment+rimWidthMm, -(latchSupportRadius-adjustment)-(2*adjustment)-latchScrewOffsetMm])
                                     translate([latchMountX-(latchSupportWidth+latchToloerance),(boxLengthYMm+latchSupportRadius),latchSupportRadius])
-                                        rotate([30,0,0])
+                                        rotate([60,0,0])
                                             translate([0,-latchSupportRadius*6,0])
                                                 cube([latchSupportWidth, latchSupportRadius*6, hingeConnectorHeight]);
                                 translate([0, adjustment+rimWidthMm, -(latchSupportRadius-adjustment)-(2*adjustment)-latchScrewOffsetMm])
                                     translate([latchMountX+latchInsideWidthMm+latchToloerance,(boxLengthYMm+latchSupportRadius),latchSupportRadius])
-                                        rotate([30,0,0])
+                                        rotate([60,0,0])
                                             translate([0,-latchSupportRadius*6,0])
                                                 cube([latchSupportWidth, latchSupportRadius*6, hingeConnectorHeight]);
                             }                   
@@ -964,13 +1002,13 @@ module BotomStandardHinge() {
                         union() {
                             translate([0, adjustment, -(hingeRadiusMm-adjustment)-(2*adjustment)])
                                 translate([hingeX-(hingeOutsideWidth+hingeToleranceMm),(boxLengthYMm+openingTolerance+hingeRadiusMm),hingeRadiusMm+(openingTolerance/2)])
-                                    rotate([30,0,0])
+                                    rotate([60,0,0])
                                         // TODO: calculate the langth of the attachment piece, don't just use 6 :-/
                                         translate([0,-hingeRadiusMm*6,0])
                                             cube([hingeOutsideWidth, hingeRadiusMm*6, hingeConnectorHeight]);
                             translate([0, adjustment, -(hingeRadiusMm-adjustment)-(2*adjustment)])
                                 translate([hingeX+hingeInsideWidthMm+hingeToleranceMm,(boxLengthYMm+openingTolerance+hingeRadiusMm),hingeRadiusMm+(openingTolerance/2)])
-                                    rotate([30,0,0])
+                                    rotate([60,0,0])
                                         // TODO: calculate the langth of the attachment piece, don't just use 6 :-/
                                         translate([0,-hingeRadiusMm*6,0])
                                             cube([hingeOutsideWidth, hingeRadiusMm*6, hingeConnectorHeight]);
@@ -1022,7 +1060,7 @@ module TopStandardHinge() {
                     difference() {
                         translate([0, adjustment, -(hingeRadiusMm-adjustment)])
                             translate([hingeX,(boxLengthYMm+openingTolerance+hingeRadiusMm),hingeRadiusMm+(openingTolerance/2)])
-                                rotate([-30,0,0])
+                                rotate([-60,0,0])
                                     // TODO: calculate the langth of the attachment piece, don't just use 6 :-/
                                     translate([0,-hingeRadiusMm*6,-hingeConnectorHeight])
                                         cube([hingeInsideWidthMm, hingeRadiusMm*6, hingeConnectorHeight]);
@@ -1141,22 +1179,20 @@ module BoxShellBase(height, additionalShellThickness = 0) {
     
 }
 
-module _handle_arm_solid(x0, arm_len, z_top, thick, r, poly_n) {
+module _handle_arm_solid(x0, arm_len, z_top, thick, r) {
     slope_back = z_top / tan(60);
+    widen = r * 2;
+    foot_chamfer = min(z_top, arm_len * tan(60));
     translate([x0, 0, 0])
-        union() {
-            linear_extrude(thick)
-                polygon([
-                    [0, 0],
-                    [arm_len, 0],
-                    [arm_len, z_top],
-                    [max(0, arm_len - slope_back), z_top]
-                ]);
-            translate([0, 0, z_top]) rotate([0, 90, 0])
-                cylinder(h = thick, r = r, $fn = poly_n);
-            translate([0, arm_len, z_top]) rotate([0, 90, 0])
-                cylinder(h = thick, r = r, $fn = poly_n);
-        }
+        linear_extrude(thick)
+            polygon([
+                [0, foot_chamfer],
+                [arm_len, 0],
+                [arm_len, z_top + widen],
+                [arm_len, z_top],
+                [max(0, arm_len - slope_back), z_top],
+                [0, z_top + widen]
+            ]);
 }
 
 module CaseHandle() {
@@ -1178,10 +1214,17 @@ module CaseHandle() {
 
     difference() {
         union() {
-            _handle_arm_solid(latch1_innerX, armLength, handlePrintHeight, handleThickness, latchSupportRadius, latchPolyLvl);
-            _handle_arm_solid(latchLast_innerX - handleThickness, armLength, handlePrintHeight, handleThickness, latchSupportRadius, latchPolyLvl);
-            translate([latch1_innerX, armLength, handlePrintHeight]) rotate([0, 90, 0])
-                cylinder(h = grip_w, r = latchSupportRadius, $fn = latchPolyLvl);
+            _handle_arm_solid(latch1_innerX, armLength, handlePrintHeight, handleThickness, latchSupportRadius);
+            _handle_arm_solid(latchLast_innerX - handleThickness, armLength, handlePrintHeight, handleThickness, latchSupportRadius);
+            translate([latch1_innerX, armLength, handlePrintHeight - latchSupportRadius * 2])
+                rotate([0, 90, 0])
+                    linear_extrude(grip_w)
+                        polygon([
+                            [0, 0],
+                            [latchSupportRadius * 2, 0],
+                            [latchSupportRadius * 2, (latchSupportRadius * 2) / tan(60)],
+                            [0, latchSupportRadius * 2]
+                        ]);
         }
         translate([latch1_innerX - 0.1, 0, handlePrintHeight]) rotate([0, 90, 0]) cylinder(h = handleThickness + 0.2, r = latchScrewSmallRadiusMm + .05, $fn = 100);
         translate([latchLast_innerX - handleThickness - 0.1, 0, handlePrintHeight]) rotate([0, 90, 0]) cylinder(h = handleThickness + 0.2, r = latchScrewSmallRadiusMm + .05, $fn = 100);
@@ -1192,6 +1235,8 @@ module CaseHandle() {
 module Wall2D(wallThickness, additionalWallThickness, height, isRimIncluded, isForRotation) {
     
     floorChamferRadius = sqrt(boxChamferRadiusMm^2+boxChamferRadiusMm^2);
+    // 8-gon floor arc: annulus facets with $fn>8 create downward faces shallower than 60° from horizontal
+    rb_floor_arc_fn = 8;
     chamferTrimAdj = sqrt(((floorChamferRadius-wallThickness)^2)/2);
     
     //floorAddition = sqrt(floorChamferRadius^2 - boxChamferRadiusMm^2);
@@ -1212,18 +1257,12 @@ module Wall2D(wallThickness, additionalWallThickness, height, isRimIncluded, isF
                 union() {
                     // Add the rim
                     if(isRimIncluded) {
-                        rimChamferPositionAdj = rimWidthMm * tan(67.5);
-                        rimChamferRadius = sqrt(rimChamferPositionAdj^2+rimChamferPositionAdj^2);
-                        
-                        
                         rim_underside_drop = rimWidthMm * tan(60);
-                        difference() {
-                            translate([-rimWidthMm, -rimHeightMm - rim_underside_drop])
-                                square([rimWidthMm, rimHeightMm + rim_underside_drop]);
-                            translate([-rimWidthMm - 0.1, -rimHeightMm - rim_underside_drop - 0.1])
-                                polygon([[0, rim_underside_drop + 0.2], [rimWidthMm + 0.2, 0], [rimWidthMm + 0.2, rim_underside_drop + 0.2]]);
-                        }
-                        translate([-rimWidthMm, -rimHeightMm]) square([rimWidthMm, rimHeightMm]);
+                        polygon([
+                            [-rimWidthMm, 0],
+                            [0, 0],
+                            [-rimWidthMm, -rim_underside_drop]
+                        ]);
                     }
 
                     translate([0,-height + boxChamferRadiusMm]) square([wallThickness, height - boxChamferRadiusMm]);
@@ -1231,29 +1270,37 @@ module Wall2D(wallThickness, additionalWallThickness, height, isRimIncluded, isF
                     //translate([boxChamferRadiusMm-floorAddition, -height]) square([floorAddition, wallThickness]);
                     translate([boxChamferRadiusMm-floorAddition, -height]) square([floorAddition, wallThickness]);
 
-                    outer_corner_chamfer_h = boxChamferRadiusMm;
-                    outer_corner_chamfer_w = outer_corner_chamfer_h / tan(60);
-                    union() {
-                        translate([floorChamferRadius, -height + boxChamferRadiusMm])
-                            difference() {
-                                translate([0,0]) circle(r = floorChamferRadius, $fn = polyLvl*2);
-                                translate([0,0]) circle(r = (floorChamferRadius-wallThickness), $fn = polyLvl*2);
-                                translate([-floorChamferRadius - .1,0]) square([(floorChamferRadius*2)+.2, floorChamferRadius + .1]);
-                                if(wallThickness <= boxChamferRadiusMm) {
-                                    translate([-chamferTrimAdj,-floorChamferRadius - .1]) square([floorChamferRadius + chamferTrimAdj + .1, (floorChamferRadius*2)+.2]);
-                                }
-                                translate([-floorChamferRadius - .1,-(boxChamferRadiusMm*2)]) square([(floorChamferRadius*2)+.2, boxChamferRadiusMm]);
-                                translate([0, -floorChamferRadius * 0.15])
-                                    polygon([[0, 0], [floorChamferRadius * 2.5, 0], [floorChamferRadius * 2.5, -floorChamferRadius * 2.5]]);
-                            };
-                        translate([floorChamferRadius - outer_corner_chamfer_w, -height + boxChamferRadiusMm - outer_corner_chamfer_h])
-                            polygon([[0, 0], [outer_corner_chamfer_w, 0], [0, -outer_corner_chamfer_h]]);
-                    }
+                    translate([floorChamferRadius, -height + boxChamferRadiusMm])
+                        difference() {
+                            translate([0,0]) circle(r = floorChamferRadius, $fn = rb_floor_arc_fn);
+                            translate([0,0]) circle(r = (floorChamferRadius-wallThickness), $fn = rb_floor_arc_fn);
+                            translate([-floorChamferRadius - .1,0]) square([(floorChamferRadius*2)+.2, floorChamferRadius + .1]);
+                            if(wallThickness <= boxChamferRadiusMm) {
+                                translate([-chamferTrimAdj,-floorChamferRadius - .1]) square([floorChamferRadius + chamferTrimAdj + .1, (floorChamferRadius*2)+.2]);
+                            }
+                            translate([-floorChamferRadius - .1,-(boxChamferRadiusMm*2)]) square([(floorChamferRadius*2)+.2, boxChamferRadiusMm]);
+                            translate([-0.1, -boxChamferRadiusMm - 0.1])
+                                polygon([
+                                    [0, 0],
+                                    [(floorChamferRadius + wallThickness) * 4 + 0.2, 0],
+                                    [0, -((floorChamferRadius + wallThickness) * 4) * tan(80)]
+                                ]);
+                        }
                 }
         }      
         
         // NOT sure what this was for :-/
         //translate([(-wallThickness-additionalWallThickness)+chamferTrimAdj,-height]) square([(wallThickness+additionalWallThickness)-chamferTrimAdj, wallThickness]);
+        
+        if (additionalWallThickness > 0) {
+            top_trim = additionalWallThickness + wallThickness * 2;
+            translate([-boxChamferRadiusMm - additionalWallThickness - 0.05, 0.05])
+                polygon([
+                    [0, 0],
+                    [top_trim, 0],
+                    [0, -top_trim / tan(60)]
+                ]);
+        }
         
         // If we are rotating, we need to cut off any execess floor or wall on the other side of the y axis
         if(isForRotation) {
