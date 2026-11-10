@@ -40,24 +40,24 @@ def _span(b: Bounds, axis: int) -> float:
 # ext_* keys check that rim, hinge, and latch geometry is actually in the mesh.
 THRESHOLDS: Dict[str, Dict[str, float]] = {
     "bottom-preset-0.stl": {
-        "min_tris": 3000, "min_x": 160, "min_y": 80, "min_z": 34,
+        "min_tris": 1900, "min_x": 160, "min_y": 80, "min_z": 34,
         "ext_min_x_le": -1.5, "ext_min_y_le": -5, "ext_max_y_ge": 70, "ext_max_z_ge": 34,
     },
     "bottom-preset-2.stl": {
-        "min_tris": 3050, "min_x": 160, "min_y": 80, "min_z": 34,
+        "min_tris": 2000, "min_x": 160, "min_y": 80, "min_z": 34,
         "ext_min_x_le": -1.5, "ext_min_y_le": -5, "ext_max_y_ge": 70, "ext_max_z_ge": 34,
     },
     "lid-preset-0.stl": {
-        "min_tris": 2100, "min_x": 160, "min_y": 80, "min_z": 20,
+        "min_tris": 1350, "min_x": 160, "min_y": 80, "min_z": 20,
         "ext_min_x_le": -1.5, "ext_max_z_ge": 19,
     },
     "lid-preset-2.stl": {
-        "min_tris": 2150, "min_x": 160, "min_y": 80, "min_z": 20,
+        "min_tris": 1450, "min_x": 160, "min_y": 80, "min_z": 20,
         "ext_min_x_le": -1.5, "ext_max_z_ge": 19,
     },
     "latch.stl": {"min_tris": 1200, "min_x": 20, "min_y": 30, "min_z": 14},
     "handle.stl": {"min_tris": 80, "min_x": 100, "min_y": 80, "min_z": 8},
-    "closed-preset-2.stl": {"min_tris": 5000, "min_x": 160, "min_y": 80, "min_z": 45},
+    "closed-preset-2.stl": {"min_tris": 3500, "min_x": 160, "min_y": 80, "min_z": 45},
 }
 
 

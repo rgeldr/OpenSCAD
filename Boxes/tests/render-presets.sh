@@ -96,6 +96,10 @@ run_scad "closed preset 2" -o out/closed-preset-2.stl \
 "$PYTHON" Boxes/tests/check_layout.py out/bottom-preset-0.stl out/bottom-preset-2.stl out/closed-preset-2.stl
 "$PYTHON" Boxes/tests/check_geometry.py out/bottom-preset-0.stl out/bottom-preset-2.stl \
   out/lid-preset-0.stl out/lid-preset-2.stl out/latch.stl out/handle.stl out/closed-preset-2.stl
+geom_rc=$?
+if [[ $geom_rc -ne 0 ]]; then
+  exit "$geom_rc"
+fi
 
 if command -v xvfb-run >/dev/null; then
   echo "  PNG previews ..."
@@ -115,6 +119,16 @@ if command -v xvfb-run >/dev/null; then
       $OFF -o "out/lid-preset-$p.png" Boxes/RuggedBoxCustomeDividersV1.0.scad 2>"$LOG" || exit 1
   done
   SUMMARY+=("OK PNG previews (out/*.png)")
+  for mount in bottom lid; do
+    xvfb-run -a "$SCAD" -q --hardwarnings --autocenter --viewall --imgsize 1200,900 \
+      -D previewHingeLatchMounts=true -D previewHingeLatchPart="$mount" \
+      -D generateBoxBottom=false -D generateBoxTop=false \
+      -D generateLatches=false -D generateHandle=false -D generateGasket=false \
+      -D generateFeetIfSetInSettings=false \
+      -o "out/hinge-latch-${mount}-after.png" Boxes/RuggedBoxCustomeDividersV1.0.scad 2>"$LOG" || exit 1
+    grep -qE '(ERROR|WARNING):' "$LOG" && { cat "$LOG"; exit 1; } || true
+  done
+  SUMMARY+=("OK hinge/latch close-up PNGs (out/hinge-latch-*-after.png)")
 fi
 
 echo ""

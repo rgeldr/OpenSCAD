@@ -241,7 +241,29 @@ _rb_checked = assert(rb_validate(_bottom_divider_tree, internalBoxWidthXMm, inte
 
 closedBoxZOffset = viewBoxClosed ? boxBottomHeightZMm : 0;
 
-translate([0,0,closedBoxZOffset])
+previewHingeLatchMounts = is_undef(previewHingeLatchMounts) ? false : previewHingeLatchMounts;
+previewHingeLatchPart = is_undef(previewHingeLatchPart) ? "bottom" : previewHingeLatchPart;
+
+if (previewHingeLatchMounts) {
+    if (previewHingeLatchPart == "bottom") {
+        union() {
+            BotomStandardHinge();
+            translate([boxWidthXMm, 0, 0]) rotate([0, 0, 180]) translate([0, -boxLengthYMm, 0])
+                LatchMount(
+                    latchSupportTotalWidth,
+                    latchSupportWidth,
+                    latchScrewPositionPct,
+                    boxBottomHeightZMm,
+                    latchSupportRadius,
+                    latchToloerance
+                );
+        }
+    } else if (previewHingeLatchPart == "lid") {
+        TopStandardHinge();
+    } else {
+        assert(false, str("previewHingeLatchPart must be bottom or lid, got ", previewHingeLatchPart));
+    }
+} else translate([0,0,closedBoxZOffset])
     union() {
         // Create the box Bottom
         if(generateBoxBottom) {
@@ -565,6 +587,41 @@ module rb_teardrop_cylinder_x(length, r, tip_down = true) {
     linear_extrude(height = length)
         rotate([0, 0, tip_down ? 90 : -90])
             rb_printable_teardrop_2d(r);
+}
+
+// Printable screw bores only (teardrop). Knuckle barrels match RuggedBoxV1.3 cylinders.
+function rb_knuckle_outer_radius(support_radius, screw_radius, min_wall = 3) =
+    max(support_radius, screw_radius + min_wall);
+
+module rb_knuckle_solid_x(length, radius, tip_down = true) {
+    // Full-round teardrop barrel (60° tip); smoother arc than rb_teardrop_cylinder_x (n_arc=3).
+    rotate([0, 90, 0])
+        linear_extrude(height = length, center = false)
+            rotate([0, 0, tip_down ? 90 : -90])
+                polygon(_rb_teardrop_down_points(radius, 18));
+}
+
+module rb_knuckle_bar_x(length, radius, tip_down = true) {
+    rb_knuckle_solid_x(length, radius, tip_down = tip_down);
+}
+
+module rb_screw_hole_x(length, radius, roof_up = true) {
+    rotate([0, 90, 0])
+        linear_extrude(height = length, center = false)
+            rb_printable_teardrop_hole_2d(radius, roof_up = roof_up);
+}
+
+module rb_knuckle_back_gusset_x(thick_x, span_y, height_z) {
+  // Full-width slab from the box wall with a 60° (from horizontal) underside.
+    chamfer = min(height_z, span_y / tan(60));
+    rotate([0, 90, 0])
+        linear_extrude(height = thick_x)
+            polygon([
+                [0, 0],
+                [span_y, 0],
+                [span_y, max(0, height_z - chamfer)],
+                [0, height_z]
+            ]);
 }
 
 module rb_vertical_rib_profile_2d(w, h) {
@@ -954,37 +1011,36 @@ module LatchMount(latchSupportTotalWidth, latchSupportWidth, latchScrewPositionP
                             : latchCenterOffsetMm;
                 latchMountX = (h*latchSpacing)+((h-1)*latchSupportTotalWidth)+latchSupportWidth+latchToloerance+actualLatchCenterOffsetMm;
                 
+                latchKnuckleR = rb_knuckle_outer_radius(latchSupportRadius, latchScrewSmallRadiusMm);
+                latchGussetSpan = (latchKnuckleR * 2) + rimWidthMm;
+                latchGussetHeight = latchScrewOffsetMm + latchKnuckleR + rimWidthMm;
+
                 difference () {
                     union() {
-                        translate([latchMountX-(latchSupportWidth+latchToloerance), (boxLengthYMm+latchSupportRadius)+rimWidthMm, -latchScrewOffsetMm]) rotate([0,90,0])
-                            rb_teardrop_cylinder_x(latchSupportWidth, latchSupportRadius);
-                        translate([latchMountX+latchInsideWidthMm+latchToloerance,(boxLengthYMm+latchSupportRadius)+rimWidthMm,-latchScrewOffsetMm]) rotate([0,90,0])
-                            rb_teardrop_cylinder_x(latchSupportWidth, latchSupportRadius);
-                        
+                        translate([latchMountX-(latchSupportWidth+latchToloerance), (boxLengthYMm+latchSupportRadius)+rimWidthMm, -latchScrewOffsetMm])
+                            rb_knuckle_bar_x(latchSupportWidth, latchKnuckleR);
+                        translate([latchMountX+latchInsideWidthMm+latchToloerance,(boxLengthYMm+latchSupportRadius)+rimWidthMm,-latchScrewOffsetMm])
+                            rb_knuckle_bar_x(latchSupportWidth, latchKnuckleR);
+
                         translate([latchMountX-latchToloerance,boxLengthYMm-(boxChamferRadiusMm),0]) rotate([90,0,-90]) linear_extrude(latchSupportWidth) Wall2D(boxWallWidthMm, (rimWidthMm*2), caseSectionHeight, false);
                         translate([latchMountX+latchInsideWidthMm+latchToloerance+latchSupportWidth,boxLengthYMm-(boxChamferRadiusMm),0]) rotate([90,0,-90]) linear_extrude(latchSupportWidth) Wall2D(boxWallWidthMm, (rimWidthMm*2), caseSectionHeight, false);
-                        
-                        adjustment = sqrt((latchSupportRadius^2)/2);
-                        hingeConnectorHeight = sqrt(latchSupportRadius^2+latchSupportRadius^2) + (latchSupportRadius-adjustment);    
-                        difference() {
-                            union() {
-                                translate([0, adjustment+rimWidthMm, -(latchSupportRadius-adjustment)-(2*adjustment)-latchScrewOffsetMm])
-                                    translate([latchMountX-(latchSupportWidth+latchToloerance),(boxLengthYMm+latchSupportRadius),latchSupportRadius])
-                                        rotate([60,0,0])
-                                            translate([0,-latchSupportRadius*6,0])
-                                                cube([latchSupportWidth, latchSupportRadius*6, hingeConnectorHeight]);
-                                translate([0, adjustment+rimWidthMm, -(latchSupportRadius-adjustment)-(2*adjustment)-latchScrewOffsetMm])
-                                    translate([latchMountX+latchInsideWidthMm+latchToloerance,(boxLengthYMm+latchSupportRadius),latchSupportRadius])
-                                        rotate([60,0,0])
-                                            translate([0,-latchSupportRadius*6,0])
-                                                cube([latchSupportWidth, latchSupportRadius*6, hingeConnectorHeight]);
-                            }                   
-                        }
+
+                        adjustment = sqrt((latchKnuckleR^2)/2);
+                        hingeConnectorHeight = sqrt(latchKnuckleR^2+latchKnuckleR^2) + (latchKnuckleR-adjustment);
+                        connector_drop = latchKnuckleR * 6;
+                        translate([0, adjustment+rimWidthMm, -(latchKnuckleR-adjustment)-(2*adjustment)-latchScrewOffsetMm])
+                            translate([latchMountX-(latchSupportWidth+latchToloerance),(boxLengthYMm+latchSupportRadius),latchKnuckleR])
+                                rotate([60,0,0])
+                                    translate([0,-connector_drop,0])
+                                        cube([latchSupportWidth, connector_drop, hingeConnectorHeight]);
+                        translate([0, adjustment+rimWidthMm, -(latchKnuckleR-adjustment)-(2*adjustment)-latchScrewOffsetMm])
+                            translate([latchMountX+latchInsideWidthMm+latchToloerance,(boxLengthYMm+latchSupportRadius),latchKnuckleR])
+                                rotate([60,0,0])
+                                    translate([0,-connector_drop,0])
+                                        cube([latchSupportWidth, connector_drop, hingeConnectorHeight]);
                     };
-                    // Cut the screw hole out
-                    translate([latchMountX-((latchSupportWidth+latchToloerance)+.1),boxLengthYMm+latchSupportRadius+rimWidthMm,-latchScrewOffsetMm]) rotate([0,90,0])
-                            linear_extrude(latchInsideWidthMm+(latchSupportWidth*2)+(latchToloerance*2)+.2)
-                                rb_printable_teardrop_hole_2d(latchScrewSmallRadiusMm);
+                    translate([latchMountX-((latchSupportWidth+latchToloerance)+.1),boxLengthYMm+latchSupportRadius+rimWidthMm,-latchScrewOffsetMm])
+                        rb_screw_hole_x(latchInsideWidthMm+(latchSupportWidth*2)+(latchToloerance*2)+.2, latchScrewSmallRadiusMm);
                 }
             }       
         }
@@ -1011,48 +1067,38 @@ module BotomStandardHinge() {
                         : hingeCenterOffsetMm;
             hingeX = (h*hingeSpacing)+((h-1)*hingeTotalWidthMm)+hingeOutsideWidth+hingeToleranceMm+actualHingeCenterOffsetMm;
             
+            hingeKnuckleR = rb_knuckle_outer_radius(hingeRadiusMm, hingeScrewSmallRadiusMm);
+            hingeGussetSpan = (hingeKnuckleR * 2) + rimWidthMm;
+            hingeGussetHeight = hingeKnuckleR + rimWidthMm + openingTolerance;
+
             difference () {
                 union() {
-                    // Main hinge cylinder
-                    translate([hingeX-(hingeOutsideWidth+hingeToleranceMm),boxLengthYMm+hingeRadiusMm+openingTolerance,openingTolerance/2]) rotate([0,90,0])
-                        rb_teardrop_cylinder_x(hingeOutsideWidth, hingeRadiusMm);
-                    translate([hingeX+hingeInsideWidthMm+hingeToleranceMm,boxLengthYMm+hingeRadiusMm+openingTolerance,openingTolerance/2]) rotate([0,90,0])
-                        rb_teardrop_cylinder_x(hingeOutsideWidth, hingeRadiusMm);
-                    
-                    
-                    // ribs
+                    translate([hingeX-(hingeOutsideWidth+hingeToleranceMm),boxLengthYMm+hingeRadiusMm+openingTolerance,openingTolerance/2])
+                        rb_knuckle_bar_x(hingeOutsideWidth, hingeKnuckleR);
+                    translate([hingeX+hingeInsideWidthMm+hingeToleranceMm,boxLengthYMm+hingeRadiusMm+openingTolerance,openingTolerance/2])
+                        rb_knuckle_bar_x(hingeOutsideWidth, hingeKnuckleR);
+
                     translate([hingeX-hingeToleranceMm,boxLengthYMm-(boxChamferRadiusMm+rimWidthMm),0]) rotate([90,0,-90]) linear_extrude(hingeOutsideWidth) Wall2D(boxWallWidthMm, supportRibThickness, boxBottomHeightZMm, false);
                     translate([hingeX+hingeInsideWidthMm+hingeToleranceMm+hingeOutsideWidth,boxLengthYMm-(boxChamferRadiusMm+rimWidthMm),0]) rotate([90,0,-90]) linear_extrude(hingeOutsideWidth) Wall2D(boxWallWidthMm, supportRibThickness, boxBottomHeightZMm, false);
-                    
-                    // Attach the hinge to the top
-                    adjustment = sqrt((hingeRadiusMm^2)/2);
-                    hingeConnectorHeight = sqrt(hingeRadiusMm^2+hingeRadiusMm^2) + (hingeRadiusMm-adjustment);    
-                    
-                    difference() {
-                        union() {
-                            translate([0, adjustment, -(hingeRadiusMm-adjustment)-(2*adjustment)])
-                                translate([hingeX-(hingeOutsideWidth+hingeToleranceMm),(boxLengthYMm+openingTolerance+hingeRadiusMm),hingeRadiusMm+(openingTolerance/2)])
-                                    rotate([60,0,0])
-                                        // TODO: calculate the langth of the attachment piece, don't just use 6 :-/
-                                        translate([0,-hingeRadiusMm*6,0])
-                                            cube([hingeOutsideWidth, hingeRadiusMm*6, hingeConnectorHeight]);
-                            translate([0, adjustment, -(hingeRadiusMm-adjustment)-(2*adjustment)])
-                                translate([hingeX+hingeInsideWidthMm+hingeToleranceMm,(boxLengthYMm+openingTolerance+hingeRadiusMm),hingeRadiusMm+(openingTolerance/2)])
-                                    rotate([60,0,0])
-                                        // TODO: calculate the langth of the attachment piece, don't just use 6 :-/
-                                        translate([0,-hingeRadiusMm*6,0])
-                                            cube([hingeOutsideWidth, hingeRadiusMm*6, hingeConnectorHeight]);
-                        } 
-                        // TODO: fix this cutout as it doesn't work when the case is very curved!!!                  
-                        //ranslate([0,boxLengthYMm-boxWallWidthMm-boxLengthYMm,-boxBottomHeightZMm])
-                        //   cube([boxWidthXMm,boxLengthYMm,boxBottomHeightZMm]);
-                    }
+
+                    adjustment = sqrt((hingeKnuckleR^2)/2);
+                    hingeConnectorHeight = sqrt(hingeKnuckleR^2+hingeKnuckleR^2) + (hingeKnuckleR-adjustment);
+                    connector_drop = hingeKnuckleR * 6;
+                    translate([0, adjustment, -(hingeKnuckleR-adjustment)-(2*adjustment)])
+                        translate([hingeX-(hingeOutsideWidth+hingeToleranceMm),(boxLengthYMm+openingTolerance+hingeRadiusMm),hingeRadiusMm+(openingTolerance/2)])
+                            rotate([60,0,0])
+                                translate([0,-connector_drop,0])
+                                    cube([hingeOutsideWidth, connector_drop, hingeConnectorHeight]);
+                    translate([0, adjustment, -(hingeKnuckleR-adjustment)-(2*adjustment)])
+                        translate([hingeX+hingeInsideWidthMm+hingeToleranceMm,(boxLengthYMm+openingTolerance+hingeRadiusMm),hingeRadiusMm+(openingTolerance/2)])
+                            rotate([60,0,0])
+                                translate([0,-connector_drop,0])
+                                    cube([hingeOutsideWidth, connector_drop, hingeConnectorHeight]);
                 };
-                // Cut the screw hole out
-                translate([hingeX-((hingeOutsideWidth+hingeToleranceMm)+.1),boxLengthYMm+hingeRadiusMm+openingTolerance,openingTolerance/2]) rotate([0,90,0]) linear_extrude(hingeInsideWidthMm+(hingeOutsideWidth*2)+(hingeToleranceMm*2)+.2)
-                        rb_printable_teardrop_hole_2d(hingeScrewSmallRadiusMm);
+                translate([hingeX-((hingeOutsideWidth+hingeToleranceMm)+.1),boxLengthYMm+hingeRadiusMm+openingTolerance,openingTolerance/2])
+                    rb_screw_hole_x(hingeInsideWidthMm+(hingeOutsideWidth*2)+(hingeToleranceMm*2)+.2, hingeScrewSmallRadiusMm);
+            }
         }
-    }
 }
 
 
@@ -1075,35 +1121,30 @@ module TopStandardHinge() {
                         : hingeCenterOffsetMm;
             hingeX = (h*hingeSpacing)+((h-1)*hingeTotalWidthMm)+hingeOutsideWidth+hingeToleranceMm+actualHingeCenterOffsetMm;
             
+            hingeKnuckleR = rb_knuckle_outer_radius(hingeRadiusMm, hingeScrewLargeRadiusMm);
+            hingeGussetSpan = (hingeKnuckleR * 2) + rimWidthMm;
+            hingeGussetHeight = hingeKnuckleR + rimWidthMm + openingTolerance;
+
             difference () {
                 union() {
-                    // Main hinge cylinder
-                    translate([hingeX,boxLengthYMm+hingeRadiusMm+openingTolerance,openingTolerance/2]) rotate([0,90,0])
-                        rb_teardrop_cylinder_x(hingeInsideWidthMm, hingeRadiusMm, tip_down = false);
-                      
-                    // support ribs
+                    translate([hingeX,boxLengthYMm+hingeRadiusMm+openingTolerance,openingTolerance/2])
+                        rb_knuckle_bar_x(hingeInsideWidthMm, hingeKnuckleR, tip_down = false);
+
                     translate([0,boxLengthYMm-2,openingTolerance]) rotate([180,0,0]) translate([hingeX,boxChamferRadiusMm,0]) rotate([90,0,90]) linear_extrude(hingeInsideWidthMm) Wall2D(boxWallWidthMm, supportRibThickness, boxTopHeightZMm, false);
-                    
-                    // Attach the hinge to the top
-                    adjustment = sqrt((hingeRadiusMm^2)/2);
-                    hingeConnectorHeight = sqrt(hingeRadiusMm^2+hingeRadiusMm^2) + (hingeRadiusMm-adjustment);                  
-                    difference() {
-                        translate([0, adjustment, -(hingeRadiusMm-adjustment)])
-                            translate([hingeX,(boxLengthYMm+openingTolerance+hingeRadiusMm),hingeRadiusMm+(openingTolerance/2)])
-                                rotate([-60,0,0])
-                                    // TODO: calculate the langth of the attachment piece, don't just use 6 :-/
-                                    translate([0,-hingeRadiusMm*6,-hingeConnectorHeight])
-                                        cube([hingeInsideWidthMm, hingeRadiusMm*6, hingeConnectorHeight]);
-                        // TODO: fix this cutout as it doesn't work when the case is very curved!!!
-                        //translate([0,boxLengthYMm-boxWallWidthMm-boxLengthYMm,0])
-                        //    cube([boxWidthXMm,boxLengthYMm,boxTopHeightZMm]);
-                    }
+
+                    adjustment = sqrt((hingeKnuckleR^2)/2);
+                    hingeConnectorHeight = sqrt(hingeKnuckleR^2+hingeKnuckleR^2) + (hingeKnuckleR-adjustment);
+                    connector_drop = hingeKnuckleR * 6;
+                    translate([0, adjustment, -(hingeKnuckleR-adjustment)])
+                        translate([hingeX,(boxLengthYMm+openingTolerance+hingeRadiusMm),hingeRadiusMm+(openingTolerance/2)])
+                            rotate([-60,0,0])
+                                translate([0,-connector_drop,-hingeConnectorHeight])
+                                    cube([hingeInsideWidthMm, connector_drop, hingeConnectorHeight]);
                 };
-                // Cut the screw hole out
-                translate([hingeX-.1,boxLengthYMm+hingeRadiusMm+openingTolerance,openingTolerance/2]) rotate([0,90,0])
-                    linear_extrude(hingeInsideWidthMm + .2) rb_printable_teardrop_hole_2d(hingeScrewLargeRadiusMm, roof_up = false);
+                translate([hingeX-.1,boxLengthYMm+hingeRadiusMm+openingTolerance,openingTolerance/2])
+                    rb_screw_hole_x(hingeInsideWidthMm + .2, hingeScrewLargeRadiusMm, roof_up = false);
+            }
         }
-    }
 }
 
 module BoxShellBase(height, additionalShellThickness = 0) {
