@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 import io
+import os
 import struct
 import math
+import subprocess
+import sys
+import tempfile
 import unittest
 
 from check_overhangs import check_triangles, load_triangles, mesh_signed_volume
@@ -102,6 +106,31 @@ class CheckOverhangsTests(unittest.TestCase):
             self.assertLess(fails[0][1], -0.9)
         finally:
             os.unlink(path)
+
+    def test_report_only_does_not_fail_the_process(self):
+        data = _binary_stl([((0, 0, 2), (0, 1, 2), (1, 0, 2))])
+        script = os.path.join(os.path.dirname(__file__), "check_overhangs.py")
+        with tempfile.NamedTemporaryFile(suffix=".stl", delete=False) as f:
+            f.write(data)
+            path = f.name
+        try:
+            gated = subprocess.run(
+                [sys.executable, script, path],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            report = subprocess.run(
+                [sys.executable, script, "--report-only", path],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        finally:
+            os.unlink(path)
+        self.assertEqual(gated.returncode, 1, msg=gated.stdout + gated.stderr)
+        self.assertEqual(report.returncode, 0, msg=report.stdout + report.stderr)
+        self.assertIn("overhang", report.stdout)
 
     def test_load_binary_round_trip(self):
         import os

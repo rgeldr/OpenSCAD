@@ -70,6 +70,26 @@ class RenderScriptFailureTest(unittest.TestCase):
             "ERROR: The given mesh is not closed! Unable to convert to CGAL_Nef_Polyhedron.",
         )
 
+    def test_overhang_report_does_not_gate_render_scripts(self) -> None:
+        sh = os.path.join(self.repo, "Boxes", "tests", "render-presets.sh")
+        ps = os.path.join(self.repo, "Boxes", "tests", "render-presets.ps1")
+        with open(sh, encoding="utf-8") as sh_file:
+            sh_text = sh_file.read()
+        with open(ps, encoding="utf-8") as ps_file:
+            ps_text = ps_file.read()
+        self.assertNotIn("overhang check failed", ps_text)
+        self.assertIn('"--report-only"', ps_text)
+        checker_lines = [
+            line
+            for line in sh_text.splitlines()
+            if "check_overhangs.py" in line or "check_rugged_overhangs.py" in line
+        ]
+        self.assertTrue(checker_lines)
+        for line in checker_lines:
+            if "load_triangles" in line:
+                continue
+            self.assertIn("--report-only", line, msg=line)
+
     def test_bash_fails_on_warning(self) -> None:
         bash = self._require_bash()
         self._assert_fails_sh(
