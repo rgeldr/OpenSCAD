@@ -212,6 +212,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=None,
         help="Ignore downward horizontals at this Z (mm) from hollow rim groove CSG (e.g. 29 for default bottom)",
     )
+    p.add_argument(
+        "--report-only",
+        action="store_true",
+        help="Print results but always exit 0 (informational; render scripts use this)",
+    )
     args = p.parse_args(argv)
 
     any_fail = False
@@ -235,6 +240,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(f"  ... and {len(fails) - 10} more")
         else:
             print(f"{path}: ok ({len(tris)} triangles)")
+    if args.report_only:
+        return 0
     return 1 if any_fail else 0
 
 

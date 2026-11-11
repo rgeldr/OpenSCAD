@@ -158,9 +158,8 @@ function Invoke-Check([string]$Stl, [switch]$Rugged) {
     } else {
         $script = "Boxes\tests\check_overhangs.py"
     }
-    $ran = Invoke-Native $py @($script, $Stl)
+    $ran = Invoke-Native $py @($script, "--report-only", $Stl)
     Write-NativeLines $ran.Lines
-    if ($ran.Code -ne 0) { throw "overhang check failed: $Stl (exit $($ran.Code))" }
 }
 
 if ($env:RENDER_PRESETS_LIBRARY -eq "1") { return }

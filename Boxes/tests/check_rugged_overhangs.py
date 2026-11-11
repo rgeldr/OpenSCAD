@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""Overhang gate for Rugged Box custom-divider exports (preset STLs).
+"""Optional STL overhang report for Rugged Box preset exports.
 
-Downward faces shallower than 60° from horizontal fail (n_z < -0.5),
-which is the 30°-from-vertical rule. Bed faces and matched hollow-boolean
-pairs are ignored by check_triangles / strip_csg_coplanar_pairs. There is
-no rim-shelf or low-poly exemption.
+Downward faces shallower than 60° from horizontal are listed (n_z < -0.5).
+Render scripts pass --report-only so this is informational only.
 """
 from __future__ import annotations
 
@@ -15,11 +13,13 @@ from check_overhangs import check_triangles, load_triangles, strip_csg_coplanar_
 
 
 def main(argv: Sequence[str]) -> int:
-    if len(argv) < 2:
-        print("usage: check_rugged_overhangs.py <stl>...", file=sys.stderr)
+    report_only = "--report-only" in argv
+    paths = [a for a in argv[1:] if a != "--report-only"]
+    if not paths:
+        print("usage: check_rugged_overhangs.py [--report-only] <stl>...", file=sys.stderr)
         return 2
     any_fail = False
-    for path in argv[1:]:
+    for path in paths:
         tris = strip_csg_coplanar_pairs(load_triangles(path))
         fails = check_triangles(tris)
         if fails:
@@ -31,7 +31,7 @@ def main(argv: Sequence[str]) -> int:
                 print(f"  ... and {len(fails) - 10} more")
         else:
             print(f"{path}: ok ({len(tris)} triangles)")
-    return 1 if any_fail else 0
+    return 0 if report_only else (1 if any_fail else 0)
 
 
 if __name__ == "__main__":

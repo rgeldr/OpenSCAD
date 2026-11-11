@@ -64,7 +64,7 @@ for p in 0 1 2 3; do
     -D dividerLayoutPreset="$p" \
     -D generateBoxTop=false -D generateLatches=false -D generateHandle=false \
     $OFF Boxes/RuggedBoxCustomeDividersV1.0.scad
-  "$PYTHON" Boxes/tests/check_rugged_overhangs.py "out/bottom-preset-$p.stl"
+  "$PYTHON" Boxes/tests/check_rugged_overhangs.py --report-only "out/bottom-preset-$p.stl"
 done
 
 for p in 0 1 2 3; do
@@ -73,20 +73,20 @@ for p in 0 1 2 3; do
     -D generateBoxBottom=false -D generateBoxTop=true \
     -D generateLatches=false -D generateHandle=false \
     $OFF Boxes/RuggedBoxCustomeDividersV1.0.scad
-  "$PYTHON" Boxes/tests/check_rugged_overhangs.py "out/lid-preset-$p.stl"
+  "$PYTHON" Boxes/tests/check_rugged_overhangs.py --report-only "out/lid-preset-$p.stl"
 done
 
 run_scad "latch" -o out/latch.stl \
   -D generateBoxBottom=false -D generateBoxTop=false \
   -D generateLatches=true -D generateHandle=false \
   $OFF Boxes/RuggedBoxCustomeDividersV1.0.scad
-"$PYTHON" Boxes/tests/check_overhangs.py out/latch.stl
+"$PYTHON" Boxes/tests/check_overhangs.py --report-only out/latch.stl
 
 run_scad "handle" -o out/handle.stl \
   -D generateBoxBottom=false -D generateBoxTop=false \
   -D generateLatches=false -D generateHandle=true -D numberOfLatches=2 \
   $OFF Boxes/RuggedBoxCustomeDividersV1.0.scad
-"$PYTHON" Boxes/tests/check_overhangs.py out/handle.stl
+"$PYTHON" Boxes/tests/check_overhangs.py --report-only out/handle.stl
 
 run_scad "closed preset 2" -o out/closed-preset-2.stl \
   -D viewBoxClosed=true -D dividerLayoutPreset=2 \

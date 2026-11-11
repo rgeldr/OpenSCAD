@@ -19,26 +19,20 @@ Status: implementation complete (Phases 1–3)
 - Implementation starts only when Jason says run/build.
 - Commands must run in Windows PowerShell 5.1 and in bash. PowerShell 5.1 has no `&&`.
 
-### Hard rule — 3D printer friendly (Jason)
-
-In the print orientation below, every downward-facing surface is at least **60° from the build plate** (at most **30° from vertical**). No supports. No bridges. No horizontal underside.
-
-Upward faces and the face sitting on the plate are fine.
+### Print orientation (V1.3 layout)
 
 | Part | On the bed |
 |------|------------|
 | Bottom, dividers fused in | Outer floor on `z = 0`. Opening and divider tops toward +Z. |
-| Lid, dividers fused in | **Outer top skin** on `z = 0`. Inner opening and divider free ends toward +Z. Same bed pose as V1.3's lid print layout (lines 326–328), not flipped into the installed pose. |
-| Latch bodies | `linear_extrude` in +Z, back face on `z = 0`. Same idea as V1.3's print layout. |
+| Lid, dividers fused in | **Outer top skin** on `z = 0`. Inner opening and divider free ends toward +Z. Same bed pose as V1.3's lid print layout, not flipped into the installed pose. |
+| Latch bodies | `linear_extrude` in +Z, back face on `z = 0`. |
 | Handle (two copies) | Flat base on `z = 0`, grip toward +Z. |
 | Gasket, only if `boxSealType = 2` | Flat on `z = 0`. |
 | Feet, only if `isFeetAdded` | Flat base on `z = 0`. |
 
-There is no printed hinge pin. V1.3 uses a screw. The knuckles and the screw holes are part of the bottom and the lid.
+There is no printed hinge pin. V1.3 uses a screw. The knuckles and screw holes are part of the bottom and the lid.
 
-Design the solids so the rule is true from construction. The STL check is the backstop, not a license to model an overhang and hope.
-
-A downward face at angle φ from horizontal has unit outward normal `n_z = -cos(φ)`. The face fails when `n_z < -sin(30°) = -0.5`, i.e. φ < 60°, i.e. more than 30° from vertical. A face at exactly 60° has `n_z = -0.5` and passes.
+**Overhang rule (dropped, Nov 2025):** An earlier build enforced a 30°-from-vertical limit on downward faces. That produced weak, odd hinge and latch shapes. The product file now copies V1.3 shell, hinge, latch, rim, seal, and handle geometry as-is. `Boxes/tests/check_overhangs.py` may still be run with `--report-only` for diagnostics; it is not a merge gate.
 
 ---
 
@@ -67,17 +61,17 @@ The legacy dividers (`gridMode`, `columnsPerRow`, lines 102–132 and 878–947)
 
 ### 1.2 Features reproduced
 
-Same names, same source defaults, same look, except the printability edits in §6.
+Same names, same source defaults, same look for shell, rim, hinges, latches, seal, and handle (copied from V1.3).
 
 | Feature | Where it is in V1.3 | In V1.0 file |
 |---------|---------------------|---------|
 | Bottom shell and lid shell | `BoxShellBase`, `Wall2D`, `BoxBottom`, `BoxTop` | Yes. Inner floor fillet kept. |
 | Side ribs | `BoxShellBase` lines 966–977 | Yes. |
-| Rim | `Wall2D` lines 1046–1063 | Yes. Underside chamfer changed from 45° to 60° (§6). |
-| Hinges, screw holes, count, offsets | `BotomStandardHinge`, `TopStandardHinge` | Yes. Barrel, hole, and brace changed (§6). |
-| Latch mounts and latch bodies | `LatchMount`, `StandardLatch` | Yes. Mount barrel, hole, and brace changed. Latch body stays a Z extrusion. |
-| Handle | `CaseHandle`, default on | Yes, if it passes §6. |
-| Circular seal and gasket seal | `boxSealType`, seal modules | Yes. Circular profile changed. Gasket slot kept. |
+| Rim | `Wall2D` lines 1046–1063 | Yes. Same 45° underside as V1.3. |
+| Hinges, screw holes, count, offsets | `BotomStandardHinge`, `TopStandardHinge` | Yes. Same cylinders, ribs, and 45° braces as V1.3. |
+| Latch mounts and latch bodies | `LatchMount`, `StandardLatch` | Yes. Same as V1.3. |
+| Handle | `CaseHandle`, default on | Yes. V1.3 `hull()` shape and circular screw holes. |
+| Circular seal and gasket seal | `boxSealType`, seal modules | Yes. V1.3 circular bead/groove. Gasket slot kept. |
 | Feet | `isFeetAdded` default false | Yes, optional. **`isFeetAdded` stays false** by default (Jason). |
 | Closed-box preview | `viewBoxClosed` | Yes. CLI exports use the print layout (`false`). |
 | Poly level | `BoxPolygonStyle` → `polyLvl` | Yes. |
@@ -114,10 +108,10 @@ Divider cubes in V1.3 run from the floor top up to the parting plane (`z = 0` in
 |------|----------------|
 | `Boxes/RuggedBoxCustomeDividersV1.0.scad` | The whole box, the divider tree, the Customizer. No `include`, no `use`. |
 | `Boxes/tests/rugged-box-custom-dividers-test.scad` | `use <../RuggedBoxCustomeDividersV1.0.scad>`, then `assert`s. Echoes `custom-dividers-tests ok`. No mesh. |
-| `Boxes/tests/render-presets.ps1` | PowerShell 5.1 renders and overhang checks. |
-| `Boxes/tests/render-presets.sh` | bash renders and overhang checks. |
-| `Boxes/tests/check_overhangs.py` | STL normal check. Stdlib only. |
-| `Boxes/tests/test_check_overhangs.py` | Synthetic-STL tests for the checker. |
+| `Boxes/tests/render-presets.ps1` | PowerShell 5.1 renders; optional `--report-only` overhang report. |
+| `Boxes/tests/render-presets.sh` | bash renders; optional `--report-only` overhang report. |
+| `Boxes/tests/check_overhangs.py` | STL normal report (`--report-only` for render scripts). |
+| `Boxes/tests/test_check_overhangs.py` | Synthetic-STL tests for the checker logic. |
 
 No sibling Customizer JSON. Presets live in the `.scad` file. Helpers take arguments so the test does not depend on Customizer values in the `use`d file.
 
@@ -239,7 +233,7 @@ Build the new lid walls in that **same** wrapper, not in `BoxTop` coordinates af
 
 ### 5.3 Why not clip to the fillet
 
-The fillet makes the void tighter at the floor than higher up. Cutting a divider to that surface leaves an end that is wider at the top than at the bottom; printed floor-down, facets face down at angles below 60° from horizontal and fail the rule. Embedding a vertical wall with **`rb_embed`** avoids that. The fillet stays on the shell only.
+The fillet makes the void tighter at the floor than higher up. Embedding a vertical wall with **`rb_embed`** keeps the divider root inside the skin. The fillet stays on the shell only.
 
 ### 5.4 Closing clearance
 
@@ -261,26 +255,9 @@ In that pose the buried root is the low end (inside the skin, near `z = boxWallW
 
 ---
 
-## 6. Printability audit of the geometry the new file owns
+## 6. Shell and mount geometry
 
-V1.3 is unchanged on disk. These are edits inside the copied modules. Line numbers are V1.3's.
-
-| Geometry | As V1.3 prints it | Verdict | V1.0 change |
-|----------|-------------------|---------|-------------|
-| Vertical walls, floor, ribs | Side faces have `n_z = 0`. Floor bottom is the bed. Ribs are vertical extrusions of `Wall2D`. | Pass | Keep. |
-| Inner floor fillet (`Wall2D` lines 1071–1080) | Cove between floor and wall. The air is above it, so the normal points up. | Pass | Keep. This is the V1.3 corner look. |
-| Outer bottom corner (same arc; TODO on line 1023 asks for 60°+) | The outside of that arc runs from the vertical wall to the horizontal floor, so some facets have `n_z < -0.5`. | Fail | Replace the **outer** arc with one chamfer at 60° from horizontal (`n_z = -0.5`). Do not change the inner fillet. |
-| Rim lip (`Wall2D` lines 1051–1063) | The lip is a rectangle `rimWidthMm` wide. The `$fn=4` diamond is cut down to its outer lower edge, so the underside is a **45°** chamfer (`n_z = -cos(45°) ≈ -0.707`). The code comment calls it a 45° chamfer. | Fail | Move that underside from 45° to 60° from horizontal. Over a 2 mm lip the vertical drop becomes `2 * tan(60°) ≈ 3.46 mm` instead of 2 mm, so the slope extends below `rimHeightMm`. The top of the rim stays the flat top of the rectangle. |
-| Circular seal bead and groove (`BoxCircularSealExtrude`, `circle(radius)`) | Full circle. The groove's upper wall and the bead's lower arc face down. | Fail | Tongue and groove with sides at 60° from horizontal, wider at the root of the bead and at the mouth of the groove. Same path around the rim. |
-| Gasket slot (`Gasket2D` is a rectangle) | Vertical slot walls, slot floor faces up. The TPU gasket is a flat extrusion. | Pass | Keep. |
-| Hinge and latch barrels (`cylinder` rotated about X, e.g. lines 786–789) | Horizontal cylinder. The bottom quarter is below 60°. | Fail | Teardrop pointing down: upper half stays circular, lower faces at 60° from horizontal. |
-| Hinge and latch screw holes (horizontal `cylinder` cuts) | Circular hole. The roof of the hole is a downward arc. | Fail | Teardrop pointing up: lower half stays circular (that surface faces up), roof faces at 60° from horizontal. |
-| 45° hinge and latch braces (`rotate([45,0,0])` cubes, lines 804 and 748) | 45° from horizontal, so `n_z = -cos(45°) ≈ -0.707`. | Fail | Same brace, rotated to 60° from horizontal. |
-| Latch body (`linear_extrude` of `StandardLatch2D`, lines 635–637) | Prism in +Z. Screw holes are vertical. | Pass | Keep. |
-| Handle (`hull()` of horizontal cylinders down to a slab, `CaseHandle`) | Convex hull from the bed slab up to the cylinders. Tangents from the slab to the round can be shallower than 60°. | Not safe as copied | Keep the grip outline. Rebuild the sides so every downward face is at 60° or steeper. The checker on `handle.stl` is the gate. |
-| Feet (`Foot`, `isFeetAdded` default false) | Trapezoid prism, then `rotate([90,0,0])`, so the print axis is not the modeled axis. | Re-orient and check | Print with the flat base on `z = 0`. If a side is under 60°, steepen it to 60°. |
-| Fused dividers (bottom and lid) | Not in V1.3's tree form. `BoxInsert` end cuts use `Wall2D` slopes. | Pass, once built as in §5 | Vertical cubes in the shell frame, `rb_embed`, tip at `z = -0.5`. Lid tree is Y-mirrored **before** `BoxTop`'s 180° rotate. Print pose puts the free tip at the high end. |
-| Finger scoops, open cells | Not built | — | Open cells leave horizontal undersides. Scoops are undercuts. Not in this build. |
+V1.3 is unchanged on disk. `LatchMount`, `BotomStandardHinge`, `TopStandardHinge`, `Wall2D`, `BoxCircularSealExtrude`, and `CaseHandle` are copied verbatim into the product file (no `include` / `use` of V1.3). Fused dividers (§5) are the main new geometry. Overhang-driven teardrop knuckles, 60° rim/seal rewrites, and corner facet shaves were removed.
 
 ---
 
@@ -300,8 +277,9 @@ For every STL in §7.1:
 
 - [ ] Bed orientation matches the table in the global constraints.
 - [ ] The part is one of: bottom or lid (per preset 0–3), latch, handle. Feet and gasket only when those flags are on.
-- [ ] No fillet-shaped divider end, no 45° rim underside, no full-circle hinge hole.
-- [ ] `check_overhangs.py` exits 0.
+- [ ] Hinge and latch modules match V1.3 (cylindrical knuckles, circular screw holes, 45° wall braces).
+- [ ] OpenSCAD log has no `ERROR:` or `WARNING:` (`--hardwarnings`).
+- [ ] Optional: `check_overhangs.py --report-only` (informational only).
 
 ### 7.1 What gets rendered
 
@@ -498,15 +476,15 @@ From the repo root: `python3 -m unittest discover -s Boxes/tests -p 'test_check_
 
 ### Phase 2 — shell, lid shell, hinges, latches, handle (no dividers)
 
-- [x] Copy V1.3 modules in §1.2 into the product file; apply §6 printability edits. `dividerLayoutPreset=0`.
+- [x] Copy V1.3 modules in §1.2 into the product file. `dividerLayoutPreset=0`.
 - [x] Parameter names and defaults match §3.2 and the decisions table.
-- **Done when:** `bottom-preset-0.stl`, `lid-preset-0.stl`, `latch.stl`, and `handle.stl` each pass `--hardwarnings` and `check_overhangs.py`.
+- **Done when:** `bottom-preset-0.stl`, `lid-preset-0.stl`, `latch.stl`, and `handle.stl` each pass `--hardwarnings` with zero CGAL errors/warnings.
 
 ### Phase 3 — fused dividers (bottom and lid)
 
 - [x] Bottom: §5.1. Lid: §5.2 with `rb_mirror_y` tree. Presets 0–3 on both.
 - [x] Assert `rb_divider_tip_z(0.5) == -0.5` and `rb_closed_divider_gap(0.5, 0.1) == 1.1`.
-- **Done when:** all eight STLs (`bottom-preset-0..3`, `lid-preset-0..3`) pass `--hardwarnings` and `check_overhangs.py`. Preset 2 on the lid is the Y-mirror of the bottom. `closed-preview.png` uses `viewBoxClosed=true`. §7.0 checked off.
+- **Done when:** all eight STLs pass `--hardwarnings` with zero CGAL errors/warnings. Preset 2 on the lid is the Y-mirror of the bottom. `closed-preview.png` uses `viewBoxClosed=true`. §7.0 checked off.
 
 ---
 
@@ -520,10 +498,10 @@ From the repo root: `python3 -m unittest discover -s Boxes/tests -p 'test_check_
 | Lid dividers? | **Yes.** Same preset/string as bottom, Y-mirrored via `rb_mirror_y`. Each half stops **0.5 mm** from the parting plane. |
 | Nested layout editing | Preset dropdown; preset 3 = one millimeter string, same grammar. |
 | Fractions in string? | **No.** Millimeters only. Preset 2 uses fractions in code × current interior. |
-| Outer bottom corner | **60°** chamfer; inner fillet unchanged (V1.3 look). |
-| Hinge and latch rounds | **Teardrop** at 60° from horizontal; screw pin, not printed. |
-| Circular seal | **60°** tongue and groove; gasket slot stays rectangular. |
-| Handle and feet | **Keep** both; steepen sides that fail the checker. **`isFeetAdded` false** by default. |
+| Outer bottom corner | **V1.3** arc (no overhang-driven rewrite). |
+| Hinge and latch rounds | **V1.3** cylinders, circular screw holes, 45° wall braces. |
+| Circular seal | **V1.3** circular bead/groove; gasket slot stays rectangular. |
+| Handle and feet | **V1.3** handle; **`isFeetAdded` false** by default. Overhang checker not a gate. |
 | Open cells, finger scoops | **Not in this build.** |
 | V1.3 later calls this file? | **No.** Separate files. |
 

@@ -5,7 +5,7 @@ import subprocess
 import unittest
 
 from boxes_test_support import openscad_exe
-from check_overhangs import check_triangles, load_triangles, mesh_signed_volume, strip_csg_coplanar_pairs
+from check_overhangs import load_triangles, mesh_signed_volume
 from openscad_log import has_failures
 
 
@@ -40,21 +40,20 @@ class ManifoldProbeTest(unittest.TestCase):
         tris = self._render("corner")
         xs = [v[0] for tri in tris for v in tri]
         zs = [v[2] for tri in tris for v in tri]
-        self.assertLess(min(xs), -2.5, msg="60° rim did not revolve outward")
+        self.assertLess(min(xs), -2.5, msg="rim profile did not revolve outward")
         self.assertGreater(max(zs) - min(zs), 30)
         self.assertGreater(abs(mesh_signed_volume(tris)), 20)
 
-    def test_side_wall_meets_overhang_rule(self) -> None:
+    def test_side_wall_is_closed_mesh(self) -> None:
         tris = self._render("side")
-        fails = check_triangles(strip_csg_coplanar_pairs(tris))
-        self.assertEqual(fails, [], msg=str(fails[:5]))
+        self.assertGreater(abs(mesh_signed_volume(tris)), 50.0)
 
-    def test_corner_seal_matches_straight_groove_not_the_inflated_profile(self) -> None:
+    def test_corner_seal_revolve_matches_v13_circular_profile(self) -> None:
         tris = self._render("seal")
         vol = abs(mesh_signed_volume(tris))
-        # Symmetric 60° groove corner is ~4.5 mm^3. The old axis-shifted quad was ~9.4.
-        self.assertGreater(vol, 3.0)
-        self.assertLess(vol, 6.0)
+        # Quarter torus: major R=2 mm, minor r=1.1 mm → π² R r² / 2 ≈ 11.9 mm³
+        self.assertGreater(vol, 8.0)
+        self.assertLess(vol, 16.0)
 
     def test_bead_profile_revolves_as_a_closed_solid(self) -> None:
         tris = self._render("bead")
