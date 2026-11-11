@@ -32,7 +32,7 @@ Status: implementation complete (Phases 1–3)
 
 There is no printed hinge pin. V1.3 uses a screw. The knuckles and screw holes are part of the bottom and the lid.
 
-**Overhang rule (dropped, Nov 2025):** An earlier build enforced a 30°-from-vertical limit on downward faces. That produced weak, odd hinge and latch shapes. The product file now copies V1.3 shell, hinge, latch, rim, seal, and handle geometry as-is. `Boxes/tests/check_overhangs.py` may still be run with `--report-only` for diagnostics; it is not a merge gate.
+**Overhang rule (dropped):** An earlier build enforced a 30°-from-vertical limit on downward faces. That produced weak, odd hinge and latch shapes. The product file copies V1.3 shell, hinge, latch, rim, seal, and handle geometry. `Boxes/tests/check_overhangs.py --report-only` is a diagnostic only. It is not a merge gate, and the render scripts do not fail when it reports shallow faces.
 
 ---
 
@@ -251,7 +251,7 @@ Defaults: `1.0 + 0.1 = 1.1` mm. The two sets cannot meet. Do not also subtract `
 
 The print layout (lines 326–328) is `translate([0, …, boxTopHeightZMm]) translate([0, …, openingTolerance]) rotate([-180,0,0]) BoxTop()`. Combined with the shell's own 180° rotate, the **outer lid skin lands on `z = 0`** and the opening faces +Z.
 
-In that pose the buried root is the low end (inside the skin, near `z = boxWallWidthMm`) and the free tip is the high end (`z = boxTopHeightZMm - dividerTopClearance`). Side faces stay vertical (`n_z = 0`). The tip face points +Z. Nothing on the divider faces down. Same rule as the bottom.
+In that pose the buried root is the low end (inside the skin, near `z = boxWallWidthMm`) and the free tip is the high end (`z = boxTopHeightZMm - dividerTopClearance`). Side faces stay vertical. The tip face points +Z.
 
 ---
 
@@ -319,7 +319,7 @@ for p in 0 1 2 3; do
     -D dividerLayoutPreset="$p" \
     -D generateBoxTop=false -D generateLatches=false -D generateHandle=false \
     $OFF Boxes/RuggedBoxCustomeDividersV1.0.scad
-  "$PYTHON" Boxes/tests/check_overhangs.py "out/bottom-preset-$p.stl"
+  "$PYTHON" Boxes/tests/check_overhangs.py --report-only "out/bottom-preset-$p.stl"
 done
 
 for p in 0 1 2 3; do
@@ -328,20 +328,20 @@ for p in 0 1 2 3; do
     -D generateBoxBottom=false -D generateBoxTop=true \
     -D generateLatches=false -D generateHandle=false \
     $OFF Boxes/RuggedBoxCustomeDividersV1.0.scad
-  "$PYTHON" Boxes/tests/check_overhangs.py "out/lid-preset-$p.stl"
+  "$PYTHON" Boxes/tests/check_overhangs.py --report-only "out/lid-preset-$p.stl"
 done
 
 "$SCAD" --hardwarnings -o out/latch.stl \
   -D generateBoxBottom=false -D generateBoxTop=false \
   -D generateLatches=true -D generateHandle=false \
   $OFF Boxes/RuggedBoxCustomeDividersV1.0.scad
-"$PYTHON" Boxes/tests/check_overhangs.py out/latch.stl
+"$PYTHON" Boxes/tests/check_overhangs.py --report-only out/latch.stl
 
 "$SCAD" --hardwarnings -o out/handle.stl \
   -D generateBoxBottom=false -D generateBoxTop=false \
   -D generateLatches=false -D generateHandle=true -D numberOfLatches=2 \
   $OFF Boxes/RuggedBoxCustomeDividersV1.0.scad
-"$PYTHON" Boxes/tests/check_overhangs.py out/handle.stl
+"$PYTHON" Boxes/tests/check_overhangs.py --report-only out/handle.stl
 
 if command -v xvfb-run >/dev/null; then
   xvfb-run -a "$SCAD" --hardwarnings --autocenter --viewall --imgsize 800,600 \
@@ -373,8 +373,7 @@ function Invoke-OpenSCAD([string[]]$ScadArgs) {
     if ($LASTEXITCODE -ne 0) { throw "openscad exited $LASTEXITCODE" }
 }
 function Invoke-Check([string]$Stl) {
-    & $py Boxes\tests\check_overhangs.py $Stl
-    if ($LASTEXITCODE -ne 0) { throw "overhang check failed: $Stl" }
+    & $py Boxes\tests\check_overhangs.py --report-only $Stl
 }
 
 Invoke-OpenSCAD @("--hardwarnings","-o","out\custom-dividers-test.echo","Boxes\tests\rugged-box-custom-dividers-test.scad")
@@ -428,19 +427,19 @@ n = normalize( (v1 - v0) × (v2 - v0) )
 
 If the mesh volume is negative, flip every `n` before testing. Skip a triangle whose area is under `1e-12`.
 
-A triangle **fails** when its unit normal has `n_z < -0.5`.
+A triangle is **reported** when its unit normal has `n_z < -0.5`. That report is informational. Render scripts pass `--report-only`, which prints the faces and exits 0. Without that flag the checker still exits 1 so the unit tests can tell a shallow face from a clean one. It must not be used as a pass/fail gate on the box STLs.
 
-**Bed contact, the only exclusion:** centroid `z ≤ 0.05` and `n_z < -0.99`. That is the flat bottom on the plate. Do not skip every triangle that merely has a vertex near `z = 0`. A chamfer that leaves the bed at 45° has `n_z ≈ -0.707` and must fail even if one edge touches `z = 0`.
+**Bed contact, the only exclusion:** centroid `z ≤ 0.05` and `n_z < -0.99`. That is the flat bottom on the plate. Do not skip every triangle that merely has a vertex near `z = 0`. A chamfer that leaves the bed at 45° has `n_z ≈ -0.707` and is reported even if one edge touches `z = 0`.
 
 Upward faces (`n_z ≥ 0`) pass. A vertical wall (`n_z = 0`) passes.
 
 ASCII vs binary: if the first 2 KB contains `facet normal`, parse ASCII. Otherwise parse binary. A binary header may start with the letters `solid`, so that word is not the test.
 
 ```text
-python3 Boxes/tests/check_overhangs.py [--z-bed-eps 0.05] file.stl ...
+python3 Boxes/tests/check_overhangs.py [--report-only] [--z-bed-eps 0.05] file.stl ...
 ```
 
-Exit 0 if none fail, 1 if any fail, 2 if the file cannot be parsed. Python 3.8+, stdlib only. Windows: `python` or `py`. Linux: `python3`.
+Without `--report-only`: exit 0 if none are reported, 1 if any are, 2 if the file cannot be parsed. With `--report-only`: same printout, exit 0 unless the file cannot be parsed. Python 3.8+, stdlib only. Windows: `python` or `py`. Linux: `python3`.
 
 Unit tests, written as small STL buffers in memory (no checked-in binary):
 
