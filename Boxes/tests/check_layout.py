@@ -2,7 +2,7 @@
 """Geometry checks on rendered rugged-box STLs.
 
 Bottom print frame: floor on z=0, opening at z=boxBottomHeight (32 with defaults).
-Preset 2 on a 160x60 interior places a Y wall at y=26 and X walls at x=101.2 and x=120.4.
+The default share layout on a 160x60 interior places a Y wall at y=26 and X walls at x=101.2 and x=120.4.
 Divider tips are 0.5 mm under the opening. Closed, the lid tips sit 1.1 mm above the bottom tips.
 """
 from __future__ import annotations
@@ -40,19 +40,28 @@ def _near(faces, x=None, y=None, tol=1.5) -> List[Tuple[float, float, float]]:
     return out
 
 
-def check_bottom_preset2(path: str) -> None:
+def check_bottom_screenshot(path: str) -> None:
     faces = _up_faces(load_triangles(path), 31.0, 32.0)
-    assert _near(faces, y=26), "preset 2 bottom is missing the Y divider tip"
-    assert _near(faces, x=101.2), "preset 2 bottom is missing the lower X divider tip"
-    assert _near(faces, x=120.4), "preset 2 bottom is missing the upper X divider tip"
+    assert _near(faces, y=26), "screenshot bottom is missing the Y divider tip"
+    assert _near(faces, x=101.2), "screenshot bottom is missing the lower X divider tip"
+    assert _near(faces, x=120.4), "screenshot bottom is missing the upper X divider tip"
     for cx, cy, cz in faces:
         if abs(cy - 26) < 1.5 or abs(cx - 101.2) < 1.5 or abs(cx - 120.4) < 1.5:
             assert abs(cz - 31.5) < 0.05, f"divider tip at z={cz}, expected 31.5"
 
 
-def check_bottom_preset0(path: str) -> None:
+def check_bottom_empty(path: str) -> None:
     faces = _up_faces(load_triangles(path), 31.0, 32.0)
-    assert not _near(faces, y=26), "preset 0 bottom has a divider tip"
+    assert not _near(faces, y=26), "empty bottom has a divider tip"
+
+
+def check_bottom_grid_3x4(path: str) -> None:
+    faces = _up_faces(load_triangles(path), 31.0, 32.0)
+    for y in (22, 42):
+        assert _near(faces, y=y), f"3x4 bottom is missing the Y divider at {y}"
+    for x in (42, 82, 122):
+        assert _near(faces, x=x), f"3x4 bottom is missing the X divider at {x}"
+    assert not _near(faces, y=26), "3x4 bottom still has the screenshot Y divider"
 
 
 def check_closed(path: str) -> None:
@@ -81,12 +90,16 @@ def check_closed(path: str) -> None:
 
 
 def main(argv: Sequence[str]) -> int:
-    if len(argv) != 4:
-        print("usage: check_layout.py bottom0.stl bottom2.stl closed.stl", file=sys.stderr)
+    if len(argv) != 5:
+        print(
+            "usage: check_layout.py bottom-empty.stl bottom-screenshot.stl closed.stl bottom-grid-3x4.stl",
+            file=sys.stderr,
+        )
         return 2
-    check_bottom_preset0(argv[1])
-    check_bottom_preset2(argv[2])
+    check_bottom_empty(argv[1])
+    check_bottom_screenshot(argv[2])
     check_closed(argv[3])
+    check_bottom_grid_3x4(argv[4])
     print("layout checks ok")
     return 0
 

@@ -39,25 +39,25 @@ def _span(b: Bounds, axis: int) -> float:
 # Broken CGAL exports were ~2400 bottom / ~1764 lid triangles.
 # ext_* keys check that rim, hinge, and latch geometry is actually in the mesh.
 THRESHOLDS: Dict[str, Dict[str, float]] = {
-    "bottom-preset-0.stl": {
+    "bottom-empty.stl": {
         "min_tris": 4500, "min_x": 160, "min_y": 80, "min_z": 34,
         "ext_min_x_le": -1.5, "ext_min_y_le": -5, "ext_max_y_ge": 70, "ext_max_z_ge": 34,
     },
-    "bottom-preset-2.stl": {
+    "bottom-screenshot.stl": {
         "min_tris": 4600, "min_x": 160, "min_y": 80, "min_z": 34,
         "ext_min_x_le": -1.5, "ext_min_y_le": -5, "ext_max_y_ge": 70, "ext_max_z_ge": 34,
     },
-    "lid-preset-0.stl": {
+    "lid-empty.stl": {
         "min_tris": 3000, "min_x": 160, "min_y": 80, "min_z": 20,
         "ext_min_x_le": -1.5, "ext_max_z_ge": 19,
     },
-    "lid-preset-2.stl": {
+    "lid-screenshot.stl": {
         "min_tris": 3100, "min_x": 160, "min_y": 80, "min_z": 20,
         "ext_min_x_le": -1.5, "ext_max_z_ge": 19,
     },
     "latch.stl": {"min_tris": 1200, "min_x": 20, "min_y": 30, "min_z": 14},
     "handle.stl": {"min_tris": 80, "min_x": 75, "min_y": 80, "min_z": 8},
-    "closed-preset-2.stl": {"min_tris": 7500, "min_x": 160, "min_y": 80, "min_z": 45},
+    "closed-screenshot.stl": {"min_tris": 7500, "min_x": 160, "min_y": 80, "min_z": 45},
 }
 
 
@@ -97,7 +97,7 @@ def check_paths(paths: Sequence[str]) -> List[str]:
             except OSError:
                 pass
     for base in ("bottom", "lid"):
-        a, b = f"{base}-preset-0.stl", f"{base}-preset-2.stl"
+        a, b = f"{base}-empty.stl", f"{base}-screenshot.stl"
         if a in by_name and b in by_name and by_name[b] <= by_name[a]:
             errors.append(f"{b}: dividers missing ({by_name[b]} triangles <= {a} {by_name[a]})")
     return errors

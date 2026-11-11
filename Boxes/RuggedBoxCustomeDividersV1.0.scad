@@ -93,14 +93,133 @@ supportRibWidth = 4; // 1
 // The tolerance/separation between the top and bottom box sections
 openingTolerance = 0.1; // .05
 
-/*[Divider layout]*/
-dividerLayoutPreset = 2; // [0:None, 1:UniformGrid, 2:Screenshot, 3:CustomString]
-uniformGridCols = 2;     // [1:8]
-uniformGridRows = 2;     // [1:8]
-dividerWallThickness = 1.2;
-dividerTopClearance = 0.5;
-rb_embed = 0.2;
-dividerLayoutString = "y32(x62(.,.),x74(.,.))";
+/*[Dividers]*/
+// Height shares along Y, front (Y=0) to back. Trailing 0s are unused. [2, 3] is 40% then 60%.
+dividerRowHeights = [2, 3, 0, 0, 0, 0];
+// Width shares along X for row 1. One positive number means no column wall. Trailing 0s are unused.
+dividerRow1Widths = [62, 38, 0, 0, 0, 0, 0, 0];
+// Width shares along X for row 2.
+dividerRow2Widths = [74, 26, 0, 0, 0, 0, 0, 0];
+// Width shares along X for row 3. Ignored while that row's height is 0.
+dividerRow3Widths = [1, 0, 0, 0, 0, 0, 0, 0];
+// Width shares along X for row 4. Ignored while that row's height is 0.
+dividerRow4Widths = [1, 0, 0, 0, 0, 0, 0, 0];
+// Width shares along X for row 5. Ignored while that row's height is 0.
+dividerRow5Widths = [1, 0, 0, 0, 0, 0, 0, 0];
+// Width shares along X for row 6. Ignored while that row's height is 0.
+dividerRow6Widths = [1, 0, 0, 0, 0, 0, 0, 0];
+// Divider wall thickness in mm.
+dividerWallThickness = 1.2; // [1:0.1:4]
+// Gap from each divider tip to the opening. The closed gap is twice this plus openingTolerance.
+dividerTopClearance = 0.5; // [0.2:0.1:2]
+
+/*[Tool outlines]*/
+// Shaped block in the bottom. Off keeps the dividers and does not read outline files.
+toolInsertEnabled = false;
+// Whole bottom, or one compartment addressed by row and column.
+toolInsertTarget = 0; // [0:Whole bottom, 1:One compartment]
+// Row of that compartment. 1 is the front. Ignored for the whole bottom.
+toolInsertRow = 1; // [1:6]
+// Column of that compartment. 1 is the left.
+toolInsertColumn = 1; // [1:8]
+// Keep dividers, or remove them in the target. One compartment clears that row's column walls and keeps the cross walls.
+toolDividers = 0; // [0:Keep, 1:Remove in the target]
+// Solid insert fills up to the divider tips. Pocket floor is a thin plate on the floor.
+toolBlockMode = 0; // [0:Solid insert, 1:Pocket floor]
+// Plate thickness in pocket-floor mode.
+toolPocketPlateMm = 4; // [1:0.1:30]
+// Material that must remain under a pocket.
+toolMinPocketFloor = 1.2; // [0.8:0.1:5]
+// Mirror the bottom dividers onto the lid, or leave the lid empty. The lid never gets pockets.
+toolLid = 0; // [0:Mirror dividers, 1:Plain lid]
+// Used only when an SVG width/height is not in mm. 25.4 means 1 user unit = 1 mm.
+toolSvgDpi = 25.4; // [1:0.1:96]
+// Multiplier applied with scale() after import. 1 keeps the file size.
+toolOutlineScale = 1; // [0.5:0.01:2]
+// Slot 1 on/off.
+tool1Enabled = false;
+// Slot 1 file, relative to this .scad file. tools/_blank.svg means unused.
+tool1File = "tools/_blank.svg";
+// Slot 1 drawing width in mm, from Inkscape after resizing the page to the drawing.
+tool1WidthMm = 0; // [0:0.1:500]
+// Slot 1 drawing height in mm.
+tool1HeightMm = 0; // [0:0.1:500]
+// Slot 1 origin X, mm from the interior's left.
+tool1XMm = 0; // [0:0.1:500]
+// Slot 1 origin Y, mm from the interior's front.
+tool1YMm = 0; // [0:0.1:500]
+// Slot 1 rotation around the drawing origin, degrees counterclockwise.
+tool1Rotation = 0; // [-180:1:180]
+// Slot 1 pocket depth from the top of the block, mm.
+tool1CutDepthMm = 8; // [0:0.1:80]
+// Slot 1 extra clearance around the outline, mm. 0 is a snug cut.
+tool1ClearanceMm = 0.3; // [0:0.05:5]
+// Slot 1 finger notch on the front edge of the outline.
+tool1FingerNotch = false;
+// Slot 2 on/off.
+tool2Enabled = false;
+// Slot 2 file, relative to this .scad file.
+tool2File = "tools/_blank.svg";
+// Slot 2 drawing width in mm.
+tool2WidthMm = 0; // [0:0.1:500]
+// Slot 2 drawing height in mm.
+tool2HeightMm = 0; // [0:0.1:500]
+// Slot 2 origin X, mm.
+tool2XMm = 0; // [0:0.1:500]
+// Slot 2 origin Y, mm.
+tool2YMm = 0; // [0:0.1:500]
+// Slot 2 rotation, degrees.
+tool2Rotation = 0; // [-180:1:180]
+// Slot 2 pocket depth, mm.
+tool2CutDepthMm = 8; // [0:0.1:80]
+// Slot 2 extra clearance, mm.
+tool2ClearanceMm = 0.3; // [0:0.05:5]
+// Slot 2 finger notch.
+tool2FingerNotch = false;
+// Slot 3 on/off.
+tool3Enabled = false;
+// Slot 3 file, relative to this .scad file.
+tool3File = "tools/_blank.svg";
+// Slot 3 drawing width in mm.
+tool3WidthMm = 0; // [0:0.1:500]
+// Slot 3 drawing height in mm.
+tool3HeightMm = 0; // [0:0.1:500]
+// Slot 3 origin X, mm.
+tool3XMm = 0; // [0:0.1:500]
+// Slot 3 origin Y, mm.
+tool3YMm = 0; // [0:0.1:500]
+// Slot 3 rotation, degrees.
+tool3Rotation = 0; // [-180:1:180]
+// Slot 3 pocket depth, mm.
+tool3CutDepthMm = 8; // [0:0.1:80]
+// Slot 3 extra clearance, mm.
+tool3ClearanceMm = 0.3; // [0:0.05:5]
+// Slot 3 finger notch.
+tool3FingerNotch = false;
+// Slot 4 on/off.
+tool4Enabled = false;
+// Slot 4 file, relative to this .scad file.
+tool4File = "tools/_blank.svg";
+// Slot 4 drawing width in mm.
+tool4WidthMm = 0; // [0:0.1:500]
+// Slot 4 drawing height in mm.
+tool4HeightMm = 0; // [0:0.1:500]
+// Slot 4 origin X, mm.
+tool4XMm = 0; // [0:0.1:500]
+// Slot 4 origin Y, mm.
+tool4YMm = 0; // [0:0.1:500]
+// Slot 4 rotation, degrees.
+tool4Rotation = 0; // [-180:1:180]
+// Slot 4 pocket depth, mm.
+tool4CutDepthMm = 8; // [0:0.1:80]
+// Slot 4 extra clearance, mm.
+tool4ClearanceMm = 0.3; // [0:0.05:5]
+// Slot 4 finger notch.
+tool4FingerNotch = false;
+// Finger notch width, shared by every slot that turns the notch on.
+toolFingerNotchWidth = 12; // [4:0.5:40]
+// Finger notch depth toward the back, mm.
+toolFingerNotchDepth = 8; // [2:0.5:30]
 
 
 
@@ -222,13 +341,28 @@ latchCenterOffsetMm = (generateHandle && numberOfLatches >= 2 && (latchSpacingBa
 
 
 /* [Hidden] */
-function rb_layout_tree() =
-    rb_preset_tree(dividerLayoutPreset, internalBoxWidthXMm, internalboxLengthYMm, dividerLayoutString);
+// How far divider and insert solids overlap the shell so the union stays one piece.
+rb_embed = 0.2;
 
-_bottom_divider_tree = rb_layout_tree();
-_lid_divider_tree = rb_lid_tree(_bottom_divider_tree, boxWallWidthMm, boxWallWidthMm + internalboxLengthYMm);
+function rb_width_rows() = [
+    dividerRow1Widths, dividerRow2Widths, dividerRow3Widths,
+    dividerRow4Widths, dividerRow5Widths, dividerRow6Widths
+];
 
-_rb_checked = assert(rb_validate(_bottom_divider_tree, internalBoxWidthXMm, internalboxLengthYMm, dividerWallThickness, dividerTopClearance, internalboxBottomHeightZMm, internalBoxTopHeightZMm, rb_embed, boxWallWidthMm));
+function _rb_kept_tree(orig) =
+    (!toolInsertEnabled || toolDividers == 0) ? orig :
+    toolInsertTarget == 0 ? [] :
+    rb_clear_cell(orig, toolInsertRow, toolInsertColumn);
+
+function rb_bottom_layout(orig) =
+    let(kept = _rb_kept_tree(orig))
+    assert(rb_validate(kept, internalBoxWidthXMm, internalboxLengthYMm, dividerWallThickness, dividerTopClearance, internalboxBottomHeightZMm, internalBoxTopHeightZMm, rb_embed, boxWallWidthMm))
+    assert(rb_check_insert(orig, kept))
+    kept;
+
+_rb_orig_tree = rb_row_layout(dividerRowHeights, rb_width_rows(), internalBoxWidthXMm, internalboxLengthYMm, dividerWallThickness);
+_bottom_divider_tree = rb_bottom_layout(_rb_orig_tree);
+_lid_divider_tree = rb_lid_mode(_bottom_divider_tree, toolLid, boxWallWidthMm, boxWallWidthMm + internalboxLengthYMm);
 
 // WALL Testing
 //translate([0,-50,0]) rotate([90,0,0]) linear_extrude(6) Wall2D(boxWallWidthMm, 0, boxBottomHeightZMm, true, true);
@@ -363,17 +497,6 @@ function rb_inside_corner_trimmed(wall, chamfer) = wall <= chamfer;
 
 function rb_is_leaf(node) = len(node) == 0;
 
-function _rb_uniform_x(cols, w) =
-    cols <= 1 ? [] :
-    ["x", w / cols, [], _rb_uniform_x(cols - 1, w - w / cols)];
-
-function _rb_uniform_y(rows, l, w, cols) =
-    rows <= 1 ? _rb_uniform_x(cols, w) :
-    let(step = l / rows)
-    ["y", step, _rb_uniform_x(cols, w), _rb_uniform_y(rows - 1, l - step, w, cols)];
-
-function rb_uniform(cols, rows, w, l) = _rb_uniform_y(rows, l, w, cols);
-
 function rb_walls(node, xmin, ymin, xmax, ymax) =
     rb_is_leaf(node) ? [] :
     let(axis = node[0], pos_rel = node[1], lo = node[2], hi = node[3])
@@ -406,82 +529,209 @@ function rb_mirror_y(node, ymin, ymax) =
         ];
 
 function rb_lid_tree(bottom_tree, ymin, ymax) = rb_mirror_y(bottom_tree, ymin, ymax);
+function rb_lid_mode(bottom, mode, ymin, ymax) = mode == 1 ? [] : rb_lid_tree(bottom, ymin, ymax);
 
-function rb_screenshot_tree(w, l) =
-    ["y", 0.40 * l,
-        ["x", 0.62 * w, [], []],
-        ["x", 0.74 * w, [], []]
-    ];
+function _rb_mm(x) = round(x * 100) / 100;
 
-function rb_preset_tree(preset, w, l, layout_string) =
-    preset == 0 ? [] :
-    preset == 1 ? rb_uniform(uniformGridCols, uniformGridRows, w, l) :
-    preset == 2 ? rb_screenshot_tree(w, l) :
-    preset == 3 ? rb_parse(layout_string) :
-    assert(false, str("rb_preset_tree: invalid preset ", preset));
+function _rb_sum(v, i = 0, acc = 0) =
+    i >= len(v) ? acc : _rb_sum(v, i + 1, acc + v[i]);
 
-// --- String parser (OpenSCAD 2021.01: search / chr, no regex) ---
+function _rb_rest(v, i = 1) =
+    i >= len(v) ? [] : concat([v[i]], _rb_rest(v, i + 1));
 
-function _rb_ws_chars() = " \t\n\r";
-function _rb_digit_chars() = "0123456789.";
+function _rb_tail_zeros(v, i, name) =
+    i >= len(v) ? true :
+    assert(v[i] == 0, str(name, ": a 0 must be trailing, found 0 before ", v[i]))
+    _rb_tail_zeros(v, i + 1, name);
 
-function _rb_is_ws(c) = len(search(c, _rb_ws_chars(), 1)) > 0;
-function _rb_is_digit_or_dot(c) = len(search(c, _rb_digit_chars(), 1)) > 0;
+function _rb_used(v, i, name) =
+    i >= len(v) ? [] :
+    assert(v[i] >= 0, str(name, "[", i, "] is ", v[i], "; shares must be 0 or positive"))
+    (v[i] == 0 ? (assert(_rb_tail_zeros(v, i, name)) []) :
+        concat([v[i]], _rb_used(v, i + 1, name)));
 
-function _rb_skip_ws(s, i) =
-    (i >= len(s) || !_rb_is_ws(s[i])) ? i : _rb_skip_ws(s, i + 1);
+function _rb_check_heights(shares, total, wall, i = 0, sum = -1) =
+    let(s = sum < 0 ? _rb_sum(shares) : sum)
+    i >= len(shares) ? true :
+    let(mm = shares[i] / s * total)
+    assert(mm + 1e-6 >= wall, str("divider row ", i + 1, " height is ", _rb_mm(mm), " mm; minimum is dividerWallThickness (", wall, " mm)"))
+    _rb_check_heights(shares, total, wall, i + 1, s);
 
-function _rb_parse_number(s, i, acc) =
-    _rb_skip_ws(s, i) >= len(s) ? [acc, i] :
-    let(c = s[_rb_skip_ws(s, i)], j = _rb_skip_ws(s, i))
-    !_rb_is_digit_or_dot(c) ? [acc, j] :
-    _rb_parse_number(s, j + 1, str(acc, c));
+function _rb_check_cols(shares, total, wall, row, i = 0, sum = -1) =
+    let(s = sum < 0 ? _rb_sum(shares) : sum)
+    i >= len(shares) ? true :
+    let(mm = shares[i] / s * total)
+    assert(mm + 1e-6 >= wall, str("divider row ", row, " column ", i + 1, " is ", _rb_mm(mm), " mm; minimum is dividerWallThickness (", wall, " mm)"))
+    _rb_check_cols(shares, total, wall, row, i + 1, s);
 
-function _rb_digit_val(c) = search(c, "0123456789", 1)[0];
+function _rb_x_chain(ws, w) =
+    len(ws) <= 1 ? [] :
+    let(pos = ws[0] / _rb_sum(ws) * w)
+    ["x", pos, [], _rb_x_chain(_rb_rest(ws), w - pos)];
 
-function _rb_atof_int(s, i, end, acc) =
-    i >= end ? acc :
-    _rb_atof_int(s, i + 1, end, acc * 10 + _rb_digit_val(s[i]));
+function _rb_one_row(widths, w, wall, row_i) =
+    let(ws = _rb_used(widths, 0, str("dividerRow", row_i + 1, "Widths")))
+    assert(len(ws) > 0, str("divider row ", row_i + 1, " has a height share but no column widths"))
+    assert(_rb_check_cols(ws, w, wall, row_i + 1))
+    _rb_x_chain(ws, w);
 
-function _rb_atof_frac(s, i, acc, place) =
-    i >= len(s) ? acc :
-    _rb_atof_frac(s, i + 1, acc + _rb_digit_val(s[i]) * place, place / 10);
+function _rb_y_chain(hs, width_rows, row_i, w, l, wall) =
+    len(hs) <= 1 ? _rb_one_row(width_rows[row_i], w, wall, row_i) :
+    let(pos = hs[0] / _rb_sum(hs) * l)
+    ["y", pos,
+        _rb_one_row(width_rows[row_i], w, wall, row_i),
+        _rb_y_chain(_rb_rest(hs), width_rows, row_i + 1, w, l - pos, wall)];
 
-function _rb_atof(num_str) =
-    let(dot = search(".", num_str))
-    len(dot) > 0 ?
-        _rb_atof_int(num_str, 0, dot[0], 0) + _rb_atof_frac(num_str, dot[0] + 1, 0, 0.1) :
-        _rb_atof_int(num_str, 0, len(num_str), 0);
+function rb_row_layout(heights, width_rows, interior_w, interior_l, wall) =
+    let(hs = _rb_used(heights, 0, "dividerRowHeights"))
+    len(hs) == 0 ? [] :
+    assert(_rb_check_heights(hs, interior_l, wall))
+    _rb_y_chain(hs, width_rows, 0, interior_w, interior_l, wall);
 
-function _rb_expect_char(s, i, c, msg) =
-    let(j = _rb_skip_ws(s, i))
-    assert(j < len(s) && s[j] == c, str(msg, " at ", j, " in ", s))
-    j + 1;
+function rb_row_count(node) =
+    rb_is_leaf(node) ? 1 :
+    node[0] == "y" ? rb_row_count(node[2]) + rb_row_count(node[3]) : 1;
 
-function _rb_parse_node(s, i) =
-    let(j0 = _rb_skip_ws(s, i))
-    assert(j0 < len(s), str("rb_parse: unexpected end in ", s))
-    let(c0 = s[j0])
-    c0 == "." ? [[], j0 + 1] :
-    c0 == "x" || c0 == "y" ?
-        let(axis = c0)
-        let(np = _rb_parse_number(s, j0 + 1, ""))
-        let(num_str = np[0], j1 = np[1])
-        assert(len(num_str) > 0, str("rb_parse: missing number after ", axis, " in ", s))
-        let(pos = _rb_atof(num_str))
-        let(j2 = _rb_expect_char(s, j1, "(", "rb_parse: expected '('"))
-        let(lo_p = _rb_parse_node(s, j2))
-        let(j3 = _rb_expect_char(s, lo_p[1], ",", "rb_parse: expected ','"))
-        let(hi_p = _rb_parse_node(s, j3))
-        let(j4 = _rb_expect_char(s, hi_p[1], ")", "rb_parse: expected ')'"))
-        [[axis, pos, lo_p[0], hi_p[0]], j4] :
-    assert(false, str("rb_parse: bad input '", c0, "' in ", s));
+function rb_col_count(node) =
+    rb_is_leaf(node) ? 1 :
+    node[0] == "x" ? rb_col_count(node[2]) + rb_col_count(node[3]) : 1;
 
-function rb_parse(s) =
-    let(p = _rb_parse_node(s, 0))
-    let(j = _rb_skip_ws(s, p[1]))
-    assert(j == len(s), str("rb_parse: trailing input at ", j, " in ", s))
-    p[0];
+function _rb_band_node(node, row) =
+    row <= 1 ? (rb_is_leaf(node) || node[0] != "y" ? node : node[2]) :
+    _rb_band_node(node[3], row - 1);
+
+function _rb_row_box(node, row, xmin, ymin, xmax, ymax) =
+    row <= 1 ?
+        (rb_is_leaf(node) || node[0] != "y" ? [xmin, ymin, xmax, ymax] : [xmin, ymin, xmax, ymin + node[1]]) :
+    _rb_row_box(node[3], row - 1, xmin, ymin + node[1], xmax, ymax);
+
+function _rb_col_box(node, col, xmin, ymin, xmax, ymax) =
+    col <= 1 ?
+        (rb_is_leaf(node) || node[0] != "x" ? [xmin, ymin, xmax, ymax] : [xmin, ymin, xmin + node[1], ymax]) :
+    _rb_col_box(node[3], col - 1, xmin + node[1], ymin, xmax, ymax);
+
+function rb_cell_rect(tree, row, col, w, l) =
+    let(rows = rb_row_count(tree))
+    assert(row >= 1 && row <= rows, str("tool insert row ", row, " does not exist; this layout has ", rows, " rows"))
+    let(band = _rb_band_node(tree, row))
+    let(cols = rb_col_count(band))
+    assert(col >= 1 && col <= cols, str("tool insert column ", col, " does not exist; this row has ", cols, " columns"))
+    let(box = _rb_row_box(tree, row, 0, 0, w, l))
+    _rb_col_box(band, col, box[0], box[1], box[2], box[3]);
+
+function _rb_clear_band(node, row) =
+    row <= 1 ?
+        (rb_is_leaf(node) || node[0] != "y" ? [] : ["y", node[1], [], node[3]]) :
+    ["y", node[1], node[2], _rb_clear_band(node[3], row - 1)];
+
+function rb_clear_cell(tree, row, col) =
+    let(box = rb_cell_rect(tree, row, col, 1, 1))
+    assert(box[0] >= 0)
+    _rb_clear_band(tree, row);
+
+function _rb_rot(x, y, deg) = [x * cos(deg) - y * sin(deg), x * sin(deg) + y * cos(deg)];
+
+function rb_outline_aabb(x, y, w, h, rot, scale, clearance) =
+    let(
+        ww = w * scale, hh = h * scale, c = clearance,
+        p0 = _rb_rot(-c, -c, rot),
+        p1 = _rb_rot(ww + c, -c, rot),
+        p2 = _rb_rot(ww + c, hh + c, rot),
+        p3 = _rb_rot(-c, hh + c, rot),
+        xs = [p0[0], p1[0], p2[0], p3[0]],
+        ys = [p0[1], p1[1], p2[1], p3[1]]
+    )
+    [x + min(xs), y + min(ys), x + max(xs), y + max(ys)];
+
+function rb_notch_aabb(x, y, w, h, rot, scale, notch_w, notch_d) =
+    let(box = rb_outline_aabb(x, y, w, h, rot, scale, 0), cx = (box[0] + box[2]) / 2)
+    [cx - notch_w / 2, box[1], cx + notch_w / 2, box[1] + notch_d];
+
+function _rb_fit_edge(slot, box, target, what) =
+    assert(box[2] <= target[2] + 0.001, str("tool slot ", slot, " ", what, "extends past the compartment: right edge ", _rb_mm(box[2]), " mm, compartment ends at ", _rb_mm(target[2]), " mm"))
+    assert(box[0] >= target[0] - 0.001, str("tool slot ", slot, " ", what, "extends past the compartment: left edge ", _rb_mm(box[0]), " mm, compartment starts at ", _rb_mm(target[0]), " mm"))
+    assert(box[3] <= target[3] + 0.001, str("tool slot ", slot, " ", what, "extends past the compartment: back edge ", _rb_mm(box[3]), " mm, compartment ends at ", _rb_mm(target[3]), " mm"))
+    assert(box[1] >= target[1] - 0.001, str("tool slot ", slot, " ", what, "extends past the compartment: front edge ", _rb_mm(box[1]), " mm, compartment starts at ", _rb_mm(target[1]), " mm"))
+    true;
+
+function _rb_overlap(a0, a1, b0, b1) = a1 > b0 + 1e-6 && a0 < b1 - 1e-6;
+
+function _rb_hits_wall(box, wall, thick) =
+    wall[0] == "x" ?
+        _rb_overlap(box[0], box[2], wall[1] - thick / 2, wall[1] + thick / 2) &&
+            _rb_overlap(box[1], box[3], wall[4], wall[5]) :
+        _rb_overlap(box[1], box[3], wall[1] - thick / 2, wall[1] + thick / 2) &&
+            _rb_overlap(box[0], box[2], wall[2], wall[3]);
+
+function _rb_cross_at(slot, box, walls, thick, i) =
+    i >= len(walls) ? "" :
+    _rb_hits_wall(box, walls[i], thick) ?
+        str("tool slot ", slot, " crosses the divider at ", walls[i][0], "=", _rb_mm(walls[i][1])) :
+        _rb_cross_at(slot, box, walls, thick, i + 1);
+
+function rb_tool_file_ok(slot, file) =
+    assert(file != "tools/_blank.svg", str("tool slot ", slot, " is on but still set to tools/_blank.svg"))
+    true;
+
+function rb_tool_size_ok(slot, w, h) =
+    assert(w > 0 && h > 0, str("tool slot ", slot, " width and height must be the Inkscape page size in mm"))
+    true;
+
+function rb_tool_clearance_ok(slot, c) =
+    assert(c >= 0, str("tool slot ", slot, " clearance is ", _rb_mm(c), " mm; use 0 or a positive gap"))
+    true;
+
+function rb_tool_depth_ok(slot, depth, mode, block, min_floor) =
+    assert(depth > 0, str("tool slot ", slot, " cut depth must be > 0"))
+    mode == 0 ?
+        assert(block - depth + 1e-6 >= min_floor, str("tool slot ", slot, " cut depth ", _rb_mm(depth), " mm leaves ", _rb_mm(block - depth), " mm of floor; minimum is ", _rb_mm(min_floor), " mm (block height ", _rb_mm(block), " mm)"))
+        true :
+        assert(depth + 1e-6 <= block - min_floor, str("tool slot ", slot, " cut depth ", _rb_mm(depth), " mm is deeper than the ", _rb_mm(block), " mm plate allows; minimum floor is ", _rb_mm(min_floor), " mm"))
+        true;
+
+function rb_tool_plate_ok(plate, interior_h, clearance) =
+    let(limit = interior_h - clearance)
+    assert(plate <= limit + 1e-6, str("tool pocket plate ", _rb_mm(plate), " mm is taller than the interior allows (", _rb_mm(limit), " mm)"))
+    true;
+
+function rb_tool_slot_fits(slot, x, y, w, h, rot, scale, clearance, notch, notch_w, notch_d, target, walls, thick) =
+    let(box = rb_outline_aabb(x, y, w, h, rot, scale, clearance))
+    assert(_rb_fit_edge(slot, box, target, ""))
+    let(msg = _rb_cross_at(slot, box, walls, thick, 0))
+    assert(msg == "", msg)
+    notch ? _rb_fit_edge(slot, rb_notch_aabb(x, y, w, h, rot, scale, notch_w, notch_d), target, "finger notch ") :
+    true;
+
+function _rb_check_one_slot(slot, enabled, file, x, y, w, h, rot, depth, clearance, notch, target, walls, block_h) =
+    !enabled ? true :
+    assert(rb_tool_file_ok(slot, file))
+    assert(rb_tool_size_ok(slot, w, h))
+    assert(rb_tool_clearance_ok(slot, clearance))
+    assert(rb_tool_depth_ok(slot, depth, toolBlockMode, block_h, toolMinPocketFloor))
+    rb_tool_slot_fits(slot, x, y, w, h, rot, toolOutlineScale, clearance, notch, toolFingerNotchWidth, toolFingerNotchDepth, target, walls, dividerWallThickness);
+
+function rb_check_insert(orig, kept) =
+    !toolInsertEnabled ? true :
+    assert(toolOutlineScale > 0, "tool outline scale must be > 0")
+    assert(toolBlockMode == 0 ? true : rb_tool_plate_ok(toolPocketPlateMm, internalboxBottomHeightZMm, dividerTopClearance))
+    let(
+        target = toolInsertTarget == 0 ? [0, 0, internalBoxWidthXMm, internalboxLengthYMm] :
+            rb_cell_rect(orig, toolInsertRow, toolInsertColumn, internalBoxWidthXMm, internalboxLengthYMm),
+        walls = rb_walls(kept, 0, 0, internalBoxWidthXMm, internalboxLengthYMm),
+        block_h = toolBlockMode == 0 ? internalboxBottomHeightZMm - dividerTopClearance : toolPocketPlateMm
+    )
+    assert(_rb_check_one_slot(1, tool1Enabled, tool1File, tool1XMm, tool1YMm, tool1WidthMm, tool1HeightMm, tool1Rotation, tool1CutDepthMm, tool1ClearanceMm, tool1FingerNotch, target, walls, block_h))
+    assert(_rb_check_one_slot(2, tool2Enabled, tool2File, tool2XMm, tool2YMm, tool2WidthMm, tool2HeightMm, tool2Rotation, tool2CutDepthMm, tool2ClearanceMm, tool2FingerNotch, target, walls, block_h))
+    assert(_rb_check_one_slot(3, tool3Enabled, tool3File, tool3XMm, tool3YMm, tool3WidthMm, tool3HeightMm, tool3Rotation, tool3CutDepthMm, tool3ClearanceMm, tool3FingerNotch, target, walls, block_h))
+    assert(_rb_check_one_slot(4, tool4Enabled, tool4File, tool4XMm, tool4YMm, tool4WidthMm, tool4HeightMm, tool4Rotation, tool4CutDepthMm, tool4ClearanceMm, tool4FingerNotch, target, walls, block_h))
+    true;
+
+function rb_is_dxf(file) =
+    let(n = len(file))
+    n >= 4 && file[n - 4] == "." &&
+        (file[n - 3] == "d" || file[n - 3] == "D") &&
+        (file[n - 2] == "x" || file[n - 2] == "X") &&
+        (file[n - 1] == "f" || file[n - 1] == "F");
 
 // --- Validation ---
 
@@ -569,6 +819,87 @@ function rb_validate(node, w, l, wall_thick, clearance, clearance_bottom, cleara
     let(n = _rb_validate_node(node, 0, 0, w, l, wall_thick, 0))
     assert(n <= 32, str("rb_validate: too many walls (", n, ", max 32)"))
     true;
+
+module rb_import_outline(file) {
+    if (rb_is_dxf(file))
+        import(file, layer = "0");
+    else
+        import(file, dpi = toolSvgDpi);
+}
+
+module rb_grow_2d(clearance) {
+    if (clearance > 0)
+        offset(delta = clearance) children();
+    else
+        children();
+}
+
+module rb_outline_2d(file, x, y, rot, clearance) {
+    translate([boxWallWidthMm + x, boxWallWidthMm + y])
+        rotate([0, 0, rot])
+            rb_grow_2d(clearance)
+                scale([toolOutlineScale, toolOutlineScale])
+                    rb_import_outline(file);
+}
+
+module rb_notch_2d(x, y, w, h, rot) {
+    box = rb_notch_aabb(x, y, w, h, rot, toolOutlineScale, toolFingerNotchWidth, toolFingerNotchDepth);
+    translate([boxWallWidthMm + box[0], boxWallWidthMm + box[1]])
+        square([box[2] - box[0], box[3] - box[1]]);
+}
+
+module rb_cut_slot(file, x, y, rot, depth, clearance, notch, w, h) {
+    z_floor = -(boxBottomHeightZMm - boxWallWidthMm);
+    block_h = toolBlockMode == 0 ? internalboxBottomHeightZMm - dividerTopClearance : toolPocketPlateMm;
+    z_top = z_floor + block_h;
+    translate([0, 0, z_top - depth])
+        linear_extrude(height = depth + 0.02, convexity = 8)
+            union() {
+                rb_outline_2d(file, x, y, rot, clearance);
+                if (notch)
+                    rb_notch_2d(x, y, w, h, rot);
+            }
+}
+
+module rb_wall_slots(tree, z0, z1) {
+    gap = dividerWallThickness - 2 * rb_embed;
+    if (gap > 0.05) {
+        walls = rb_walls(tree, 0, 0, internalBoxWidthXMm, internalboxLengthYMm);
+        for (wall = walls) {
+            if (wall[0] == "x")
+                translate([boxWallWidthMm + wall[1] - gap / 2, boxWallWidthMm + wall[4], z0])
+                    cube([gap, max(wall[5] - wall[4], 0.01), z1 - z0]);
+            else
+                translate([boxWallWidthMm + wall[2], boxWallWidthMm + wall[1] - gap / 2, z0])
+                    cube([max(wall[3] - wall[2], 0.01), gap, z1 - z0]);
+        }
+    }
+}
+
+module rb_tool_insert() {
+    rect = toolInsertTarget == 0 ? [0, 0, internalBoxWidthXMm, internalboxLengthYMm] :
+        rb_cell_rect(_rb_orig_tree, toolInsertRow, toolInsertColumn, internalBoxWidthXMm, internalboxLengthYMm);
+    z_floor = -(boxBottomHeightZMm - boxWallWidthMm);
+    block_h = toolBlockMode == 0 ? internalboxBottomHeightZMm - dividerTopClearance : toolPocketPlateMm;
+    difference() {
+        translate([boxWallWidthMm + rect[0] - rb_embed, boxWallWidthMm + rect[1] - rb_embed, z_floor - rb_embed])
+            cube([
+                rect[2] - rect[0] + 2 * rb_embed,
+                rect[3] - rect[1] + 2 * rb_embed,
+                block_h + rb_embed
+            ]);
+        rb_wall_slots(_bottom_divider_tree, z_floor - rb_embed - 0.01, z_floor + block_h + 0.02);
+        // Separate ifs so a disabled slot does not import().
+        if (tool1Enabled)
+            rb_cut_slot(tool1File, tool1XMm, tool1YMm, tool1Rotation, tool1CutDepthMm, tool1ClearanceMm, tool1FingerNotch, tool1WidthMm, tool1HeightMm);
+        if (tool2Enabled)
+            rb_cut_slot(tool2File, tool2XMm, tool2YMm, tool2Rotation, tool2CutDepthMm, tool2ClearanceMm, tool2FingerNotch, tool2WidthMm, tool2HeightMm);
+        if (tool3Enabled)
+            rb_cut_slot(tool3File, tool3XMm, tool3YMm, tool3Rotation, tool3CutDepthMm, tool3ClearanceMm, tool3FingerNotch, tool3WidthMm, tool3HeightMm);
+        if (tool4Enabled)
+            rb_cut_slot(tool4File, tool4XMm, tool4YMm, tool4Rotation, tool4CutDepthMm, tool4ClearanceMm, tool4FingerNotch, tool4WidthMm, tool4HeightMm);
+    }
+}
 
 
 
@@ -664,6 +995,8 @@ module BoxBottom(isStdHinge) {
             boxWallWidthMm,
             boxWallWidthMm + internalBoxWidthXMm,
             boxWallWidthMm + internalboxLengthYMm);
+        if (toolInsertEnabled)
+            rb_tool_insert();
     }
 }
 

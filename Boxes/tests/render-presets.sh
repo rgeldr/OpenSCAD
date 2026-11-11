@@ -55,26 +55,48 @@ set -e
 grep -qE '(ERROR|WARNING):' "$LOG" && { grep -E '(ERROR|WARNING):' "$LOG" >&2; exit 1; } || true
 echo "  assert echo ... ok"
 grep -q "custom-dividers-tests ok" out/custom-dividers-test.echo
+"$PYTHON" Boxes/tests/check_tool_files.py
 if [[ -z "${RENDER_PRESETS_SKIP_UNITTEST:-}" ]]; then
   "$PYTHON" -m unittest discover -s Boxes/tests -p 'test_*.py'
 fi
 
-for p in 0 1 2 3; do
-  run_scad "bottom preset $p" -o "out/bottom-preset-$p.stl" \
-    -D dividerLayoutPreset="$p" \
-    -D generateBoxTop=false -D generateLatches=false -D generateHandle=false \
-    $OFF Boxes/RuggedBoxCustomeDividersV1.0.scad
-  "$PYTHON" Boxes/tests/check_rugged_overhangs.py --report-only "out/bottom-preset-$p.stl"
-done
+EMPTY=(-D 'dividerRowHeights=[0,0,0,0,0,0]')
+GRID=(
+  -D 'dividerRowHeights=[1,1,1,0,0,0]'
+  -D 'dividerRow1Widths=[1,1,1,1,0,0,0,0]'
+  -D 'dividerRow2Widths=[1,1,1,1,0,0,0,0]'
+  -D 'dividerRow3Widths=[1,1,1,1,0,0,0,0]'
+)
 
-for p in 0 1 2 3; do
-  run_scad "lid preset $p" -o "out/lid-preset-$p.stl" \
-    -D dividerLayoutPreset="$p" \
-    -D generateBoxBottom=false -D generateBoxTop=true \
-    -D generateLatches=false -D generateHandle=false \
-    $OFF Boxes/RuggedBoxCustomeDividersV1.0.scad
-  "$PYTHON" Boxes/tests/check_rugged_overhangs.py --report-only "out/lid-preset-$p.stl"
-done
+run_scad "bottom empty" -o out/bottom-empty.stl \
+  "${EMPTY[@]}" \
+  -D generateBoxTop=false -D generateLatches=false -D generateHandle=false \
+  $OFF Boxes/RuggedBoxCustomeDividersV1.0.scad
+"$PYTHON" Boxes/tests/check_rugged_overhangs.py --report-only out/bottom-empty.stl
+
+run_scad "bottom screenshot" -o out/bottom-screenshot.stl \
+  -D generateBoxTop=false -D generateLatches=false -D generateHandle=false \
+  $OFF Boxes/RuggedBoxCustomeDividersV1.0.scad
+"$PYTHON" Boxes/tests/check_rugged_overhangs.py --report-only out/bottom-screenshot.stl
+
+run_scad "bottom 3x4" -o out/bottom-grid-3x4.stl \
+  "${GRID[@]}" \
+  -D generateBoxTop=false -D generateLatches=false -D generateHandle=false \
+  $OFF Boxes/RuggedBoxCustomeDividersV1.0.scad
+"$PYTHON" Boxes/tests/check_rugged_overhangs.py --report-only out/bottom-grid-3x4.stl
+
+run_scad "lid empty" -o out/lid-empty.stl \
+  "${EMPTY[@]}" \
+  -D generateBoxBottom=false -D generateBoxTop=true \
+  -D generateLatches=false -D generateHandle=false \
+  $OFF Boxes/RuggedBoxCustomeDividersV1.0.scad
+"$PYTHON" Boxes/tests/check_rugged_overhangs.py --report-only out/lid-empty.stl
+
+run_scad "lid screenshot" -o out/lid-screenshot.stl \
+  -D generateBoxBottom=false -D generateBoxTop=true \
+  -D generateLatches=false -D generateHandle=false \
+  $OFF Boxes/RuggedBoxCustomeDividersV1.0.scad
+"$PYTHON" Boxes/tests/check_rugged_overhangs.py --report-only out/lid-screenshot.stl
 
 run_scad "latch" -o out/latch.stl \
   -D generateBoxBottom=false -D generateBoxTop=false \
@@ -88,14 +110,15 @@ run_scad "handle" -o out/handle.stl \
   $OFF Boxes/RuggedBoxCustomeDividersV1.0.scad
 "$PYTHON" Boxes/tests/check_overhangs.py --report-only out/handle.stl
 
-run_scad "closed preset 2" -o out/closed-preset-2.stl \
-  -D viewBoxClosed=true -D dividerLayoutPreset=2 \
+run_scad "closed screenshot" -o out/closed-screenshot.stl \
+  -D viewBoxClosed=true \
   -D generateLatches=false -D generateHandle=false \
   $OFF Boxes/RuggedBoxCustomeDividersV1.0.scad
 
-"$PYTHON" Boxes/tests/check_layout.py out/bottom-preset-0.stl out/bottom-preset-2.stl out/closed-preset-2.stl
-"$PYTHON" Boxes/tests/check_geometry.py out/bottom-preset-0.stl out/bottom-preset-2.stl \
-  out/lid-preset-0.stl out/lid-preset-2.stl out/latch.stl out/handle.stl out/closed-preset-2.stl
+"$PYTHON" Boxes/tests/check_layout.py out/bottom-empty.stl out/bottom-screenshot.stl \
+  out/closed-screenshot.stl out/bottom-grid-3x4.stl
+"$PYTHON" Boxes/tests/check_geometry.py out/bottom-empty.stl out/bottom-screenshot.stl \
+  out/lid-empty.stl out/lid-screenshot.stl out/latch.stl out/handle.stl out/closed-screenshot.stl
 geom_rc=$?
 if [[ $geom_rc -ne 0 ]]; then
   exit "$geom_rc"
@@ -104,20 +127,20 @@ fi
 if command -v xvfb-run >/dev/null; then
   echo "  PNG previews ..."
   xvfb-run -a "$SCAD" -q --hardwarnings --autocenter --viewall --imgsize 800,600 \
-    -D viewBoxClosed=true -D dividerLayoutPreset=2 \
+    -D viewBoxClosed=true \
     -D generateLatches=false -D generateHandle=false $OFF \
     -o out/closed-preview.png Boxes/RuggedBoxCustomeDividersV1.0.scad 2>"$LOG" || { cat "$LOG"; exit 1; }
   grep -qE '(ERROR|WARNING):' "$LOG" && { cat "$LOG"; exit 1; } || true
-  for p in 0 1 2 3; do
-    xvfb-run -a "$SCAD" -q --hardwarnings --autocenter --viewall --imgsize 800,600 \
-      -D viewBoxClosed=false -D dividerLayoutPreset="$p" \
-      -D generateLatches=false -D generateHandle=false -D generateBoxTop=false \
-      $OFF -o "out/bottom-preset-$p.png" Boxes/RuggedBoxCustomeDividersV1.0.scad 2>"$LOG" || exit 1
-    xvfb-run -a "$SCAD" -q --hardwarnings --autocenter --viewall --imgsize 800,600 \
-      -D viewBoxClosed=false -D dividerLayoutPreset="$p" \
-      -D generateBoxBottom=false -D generateLatches=false -D generateHandle=false \
-      $OFF -o "out/lid-preset-$p.png" Boxes/RuggedBoxCustomeDividersV1.0.scad 2>"$LOG" || exit 1
-  done
+  xvfb-run -a "$SCAD" -q --hardwarnings --autocenter --viewall --imgsize 800,600 \
+    -D viewBoxClosed=false \
+    -D generateLatches=false -D generateHandle=false -D generateBoxTop=false \
+    $OFF -o out/bottom-screenshot.png Boxes/RuggedBoxCustomeDividersV1.0.scad 2>"$LOG" || exit 1
+  grep -qE '(ERROR|WARNING):' "$LOG" && { cat "$LOG"; exit 1; } || true
+  xvfb-run -a "$SCAD" -q --hardwarnings --autocenter --viewall --imgsize 800,600 \
+    -D viewBoxClosed=false "${GRID[@]}" \
+    -D generateLatches=false -D generateHandle=false -D generateBoxTop=false \
+    $OFF -o out/bottom-grid-3x4.png Boxes/RuggedBoxCustomeDividersV1.0.scad 2>"$LOG" || exit 1
+  grep -qE '(ERROR|WARNING):' "$LOG" && { cat "$LOG"; exit 1; } || true
   SUMMARY+=("OK PNG previews (out/*.png)")
   for mount in bottom lid; do
     xvfb-run -a "$SCAD" -q --hardwarnings --autocenter --viewall --imgsize 1200,900 \

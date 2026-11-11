@@ -39,7 +39,7 @@ class CgalExportsTest(unittest.TestCase):
         os.makedirs(out, exist_ok=True)
         self._render(
             [
-                "-D", "dividerLayoutPreset=0",
+                "-D", "dividerRowHeights=[0,0,0,0,0,0]",
                 "-D", "generateBoxTop=false",
                 "-D", "generateLatches=false",
                 "-D", "generateHandle=false",
@@ -48,7 +48,7 @@ class CgalExportsTest(unittest.TestCase):
         )
         self._render(
             [
-                "-D", "dividerLayoutPreset=0",
+                "-D", "dividerRowHeights=[0,0,0,0,0,0]",
                 "-D", "generateBoxBottom=false",
                 "-D", "generateBoxTop=true",
                 "-D", "generateLatches=false",

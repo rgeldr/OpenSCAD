@@ -1,10 +1,10 @@
-Status: plan only, not started
+Status: implemented
 
 # Divider layout as Customizer controls
 
-**Goal:** Replace the stlbuddy string `y32(x62(.,.),x74(.,.))` and the preset dropdown in `Boxes/RuggedBoxCustomeDividersV1.0.scad` with Customizer controls Jason can read without learning a grammar. Design B (share vectors) is the approved layout. The tool-outline section below is also approved as the plan for non-rectangular tool pockets. Nothing in this file is implemented yet.
+**Goal:** Replace the stlbuddy string `y32(x62(.,.),x74(.,.))` and the preset dropdown in `Boxes/RuggedBoxCustomeDividersV1.0.scad` with Customizer controls Jason can read without learning a grammar. Design B (share vectors) is the approved layout. The tool-outline section below is the approved cutout design. Both are implemented in the product file.
 
-**Do not do while the status line says plan only:** change any product `.scad`, test, fixture, or render script. Do not modify `Boxes/RuggedBoxV1.3.scad`. There is no overhang rule.
+**Implemented** in `Boxes/RuggedBoxCustomeDividersV1.0.scad`. `Boxes/RuggedBoxV1.3.scad` stays untouched. There is no overhang rule.
 
 The product file stays free of `include` and `use`. The divider tree, lid mirror, wall fusion, and the 1.1 mm closed gap stay. Layout entry changes to share vectors. Tool pockets are subtracted from a block in the bottom only.
 

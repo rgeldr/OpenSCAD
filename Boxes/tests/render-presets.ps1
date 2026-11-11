@@ -177,31 +177,39 @@ try {
     if ($null -eq $echo) { $echo = "" }
     if ($echo -notmatch "custom-dividers-tests ok") { throw "assert run did not report success" }
 
+    $ran = Invoke-Native $py @("Boxes\tests\check_tool_files.py")
+    Write-NativeLines $ran.Lines
+    if ($ran.Code -ne 0) { throw "tool preflight failed (exit $($ran.Code))" }
+
     if (-not $env:RENDER_PRESETS_SKIP_UNITTEST) {
         $ran = Invoke-Native $py @("-m", "unittest", "discover", "-s", "Boxes/tests", "-p", "test_*.py")
         Write-NativeLines $ran.Lines
         if ($ran.Code -ne 0) { throw "unit tests failed (exit $($ran.Code))" }
     }
 
-    foreach ($p in 0, 1, 2, 3) {
-        Invoke-OpenSCAD "bottom preset $p" @(
-            "-o", "out\bottom-preset-$p.stl",
-            "-D", "dividerLayoutPreset=$p",
-            "-D", "generateBoxTop=false", "-D", "generateLatches=false", "-D", "generateHandle=false",
-            "-D", "generateGasket=false", "-D", "generateFeetIfSetInSettings=false",
-            "Boxes\RuggedBoxCustomeDividersV1.0.scad") -Quiet
-        Invoke-Check "out\bottom-preset-$p.stl" -Rugged
-    }
-    foreach ($p in 0, 1, 2, 3) {
-        Invoke-OpenSCAD "lid preset $p" @(
-            "-o", "out\lid-preset-$p.stl",
-            "-D", "dividerLayoutPreset=$p",
-            "-D", "generateBoxBottom=false", "-D", "generateBoxTop=true",
-            "-D", "generateLatches=false", "-D", "generateHandle=false",
-            "-D", "generateGasket=false", "-D", "generateFeetIfSetInSettings=false",
-            "Boxes\RuggedBoxCustomeDividersV1.0.scad") -Quiet
-        Invoke-Check "out\lid-preset-$p.stl" -Rugged
-    }
+    $empty = "dividerRowHeights=[0,0,0,0,0,0]"
+    $gridH = "dividerRowHeights=[1,1,1,0,0,0]"
+    $gridW = "dividerRow1Widths=[1,1,1,1,0,0,0,0]"
+    $off = @("-D", "generateGasket=false", "-D", "generateFeetIfSetInSettings=false")
+    $scadFile = @("Boxes\RuggedBoxCustomeDividersV1.0.scad")
+    $bottomCommon = @("-D", "generateBoxTop=false", "-D", "generateLatches=false", "-D", "generateHandle=false")
+    $lidCommon = @("-D", "generateBoxBottom=false", "-D", "generateBoxTop=true", "-D", "generateLatches=false", "-D", "generateHandle=false")
+
+    Invoke-OpenSCAD "bottom empty" (@("-o", "out\bottom-empty.stl", "-D", $empty) + $bottomCommon + $off + $scadFile) -Quiet
+    Invoke-Check "out\bottom-empty.stl" -Rugged
+    Invoke-OpenSCAD "bottom screenshot" (@("-o", "out\bottom-screenshot.stl") + $bottomCommon + $off + $scadFile) -Quiet
+    Invoke-Check "out\bottom-screenshot.stl" -Rugged
+    Invoke-OpenSCAD "bottom 3x4" (@(
+        "-o", "out\bottom-grid-3x4.stl",
+        "-D", $gridH,
+        "-D", $gridW,
+        "-D", "dividerRow2Widths=[1,1,1,1,0,0,0,0]",
+        "-D", "dividerRow3Widths=[1,1,1,1,0,0,0,0]") + $bottomCommon + $off + $scadFile) -Quiet
+    Invoke-Check "out\bottom-grid-3x4.stl" -Rugged
+    Invoke-OpenSCAD "lid empty" (@("-o", "out\lid-empty.stl", "-D", $empty) + $lidCommon + $off + $scadFile) -Quiet
+    Invoke-Check "out\lid-empty.stl" -Rugged
+    Invoke-OpenSCAD "lid screenshot" (@("-o", "out\lid-screenshot.stl") + $lidCommon + $off + $scadFile) -Quiet
+    Invoke-Check "out\lid-screenshot.stl" -Rugged
     Invoke-OpenSCAD "latch" @(
         "-o", "out\latch.stl",
         "-D", "generateBoxBottom=false", "-D", "generateBoxTop=false",
@@ -216,20 +224,20 @@ try {
         "-D", "generateGasket=false", "-D", "generateFeetIfSetInSettings=false",
         "Boxes\RuggedBoxCustomeDividersV1.0.scad") -Quiet
     Invoke-Check "out\handle.stl"
-    Invoke-OpenSCAD "closed preset 2" @(
-        "-o", "out\closed-preset-2.stl",
-        "-D", "viewBoxClosed=true", "-D", "dividerLayoutPreset=2",
+    Invoke-OpenSCAD "closed screenshot" @(
+        "-o", "out\closed-screenshot.stl",
+        "-D", "viewBoxClosed=true",
         "-D", "generateLatches=false", "-D", "generateHandle=false",
         "-D", "generateGasket=false", "-D", "generateFeetIfSetInSettings=false",
         "Boxes\RuggedBoxCustomeDividersV1.0.scad") -Quiet
-    $ran = Invoke-Native $py @("Boxes\tests\check_layout.py", "out\bottom-preset-0.stl", "out\bottom-preset-2.stl", "out\closed-preset-2.stl")
+    $ran = Invoke-Native $py @("Boxes\tests\check_layout.py", "out\bottom-empty.stl", "out\bottom-screenshot.stl", "out\closed-screenshot.stl", "out\bottom-grid-3x4.stl")
     Write-NativeLines $ran.Lines
     if ($ran.Code -ne 0) { throw "layout check failed (exit $($ran.Code))" }
     $ran = Invoke-Native $py @(
         "Boxes\tests\check_geometry.py",
-        "out\bottom-preset-0.stl", "out\bottom-preset-2.stl",
-        "out\lid-preset-0.stl", "out\lid-preset-2.stl",
-        "out\latch.stl", "out\handle.stl", "out\closed-preset-2.stl")
+        "out\bottom-empty.stl", "out\bottom-screenshot.stl",
+        "out\lid-empty.stl", "out\lid-screenshot.stl",
+        "out\latch.stl", "out\handle.stl", "out\closed-screenshot.stl")
     Write-NativeLines $ran.Lines
     if ($ran.Code -ne 0) { throw "geometry check failed (exit $($ran.Code))" }
 
